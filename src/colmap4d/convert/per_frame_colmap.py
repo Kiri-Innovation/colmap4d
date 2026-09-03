@@ -11,8 +11,9 @@ Design choices (each traces to a white-paper principle; the contentious one is f
   frame's points are kept and remapped to globally-unique ids; each gets its frame's time.
   Cross-frame dedup would fabricate correspondences COLMAP never computed and collapse the
   honest samples into a "conclusion" — it violates "store observations, not conclusions"
-  (§2) and is therefore NOT the default. ``dedup_points=True`` is reserved, not implemented
-  (see OPEN-6): the merge vs dedup default is a pending user decision.
+  (§2). Per the author (white paper Q3/§3.3, OPEN-6 settled), cross-frame dedup is a derived
+  view / downstream optimization and is **out of scope for v1**: ``dedup_points=True`` stays
+  reserved and is refused.
 
 * **Cameras: per-frame independent, remapped (lossless).** Real captures reassign COLMAP
   ``CAMERA_ID`` per frame (one frame may share a single intrinsic across all physical cameras,
@@ -109,8 +110,9 @@ def convert_per_frame_colmap(
     """
     if dedup_points:
         raise NotImplementedError(
-            "cross-frame point dedup is a pending design decision (OPEN-6); the default is "
-            "per-frame independent points (white paper §3.3). Not implemented."
+            "cross-frame point dedup is out of scope for v1 (OPEN-6, settled per white paper "
+            "Q3/§3.3): per-frame imports keep independent xyzt samples; dedup is a derived "
+            "view / downstream optimization. dedup_points is reserved and refused."
         )
     frame_dirs = [Path(d) for d in frame_dirs]
     if frame_times_ns is not None and len(frame_times_ns) != len(frame_dirs):
@@ -194,11 +196,13 @@ def convert_per_frame_colmap(
     synthetic = frame_times_ns is None
     ts_note = "synthetic (frame_index * frame_interval_ns)" if synthetic else "provided"
     pt_policy = "frame_instant; per-frame independent points, no cross-frame dedup"
+    # Synthetic timestamps are uniform frame_index * interval — the degenerate case of a
+    # software-clocked capture where the real per-image offsets were not recorded.
     time_meta = {
         "colmap4d_spec": "0.2-draft",
         "time_convention": "mid_exposure",
         "time_unit": "ns",
-        "clock_domain": "synthetic_frame_index" if synthetic else "provided",
+        "clock_domain": "synthetic_uniform" if synthetic else "provided",
         "devices": devices,
         "conversion": {
             "source": "per_frame_colmap",
