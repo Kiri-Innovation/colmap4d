@@ -22,8 +22,17 @@ time range/centroid — is a lossy geometric heuristic and is deliberately NOT t
 **Question for the author:** should cross-frame dedup ever be offered (as an opt-in), and if
 so, what matching criterion? For now the converter refuses `dedup_points=True`.
 
+## Resolved since (now implemented)
+- Part II best practices, Part III `groups.txt` on-disk format, Part IV ecosystem — drafted.
+- Full `validate` orchestration of dangling checks — `model.validate_full` reads model id sets
+  with the zero-dep `colmap_io` reader (no pycolmap required).
+- Base-model reading: refined the earlier "delegate to pycolmap only" stance — added a
+  zero-dependency pure-Python classic txt/bin reader (`colmap_io`) as the default, with pycolmap
+  preferred where installed. Rationale: `import colmap4d` should read a timestamped model with
+  no compiled dependency; pycolmap stays authoritative for 3.12 rigs/frames binary variants.
+
 ## Not decided here (out of WP0 scope)
-- Part III `groups.txt` on-disk format.
 - `time_convention` values beyond `mid_exposure`.
 - Binary (`.bin`) output from converters (currently text only).
+- `groups.txt` read/write helpers + `.bin` mirror (format is specified; I/O not yet coded).
 - Converters beyond `per_frame_colmap` (nerfstudio, Neu3D, HyperNeRF).

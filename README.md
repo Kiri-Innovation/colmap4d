@@ -14,21 +14,44 @@ existing file — so old tools open it as a perfectly normal (static) reconstruc
 
 ## 30-second quickstart
 
-```python
-from colmap4d import load_sidecars
+Read a COLMAP model together with its time layer — **zero dependencies**:
 
-sc = load_sidecars("path/to/sparse")     # a COLMAP model dir, with or without sidecars
-sc.times[image_id]                        # -> t_ns (int64 nanoseconds)
-sc.point_time(point3d_id)                 # -> t_ns, or None if temporally-unbounded
-sc.time_meta["clock_domain"]              # -> "utc_ntp", ...
+```python
+import colmap4d
+
+mv = colmap4d.load_model_view("path/to/sparse")   # COLMAP model dir, with or without sidecars
+
+mv.image_ids()                 # {1, 2, 3, ...}
+mv.image_time(1)               # -> t_ns (int64 nanoseconds), or None if no timestamp
+mv.point_time(42)              # -> t_ns, or None if the point is temporally-unbounded
+mv.effective_times()           # {image_id: t_ns} for images in the model
+mv.effective_points_t()        # {point3d_id: t_ns}, dangling ids already dropped
+mv.sidecars.time_meta          # {"clock_domain": "utc_ntp", ...} or None
 ```
 
-A plain COLMAP model (no sidecars) loads fine and reports empty times / all points
-temporally-unbounded — that is the backward-compatibility baseline.
+Just the timestamps, without reading the base model:
 
-The core (`colmap4d.sidecar`) is **standard-library only, zero dependencies**. Parsing the
-COLMAP base model itself is delegated to `pycolmap` (optional extra, `pip install
-colmap4d[model]`) — colmap4d never reimplements COLMAP's own parsers.
+```python
+sc = colmap4d.load_sidecars("path/to/sparse")
+sc.times[image_id]             # -> t_ns
+sc.point_time(point3d_id)      # -> t_ns, or None (temporally-unbounded)
+```
+
+Validate a model (graded checks, non-zero exit on ERROR):
+
+```python
+from colmap4d import validate_full
+from colmap4d.validate import exit_code
+problems = validate_full("path/to/sparse")     # duplicate ids = ERROR, dangling = WARNING
+code = exit_code(problems, strict=False)        # 0 if clean
+```
+
+A plain COLMAP model (no sidecars) loads fine: empty times, all points temporally-unbounded —
+the backward-compatibility baseline.
+
+The reader is **standard-library only**. `colmap4d.colmap_io` parses the classic COLMAP
+txt/bin base model; where `pycolmap` is installed (optional extra `pip install
+'colmap4d[model]'`) it is preferred for authoritative parsing and 3.12 rigs/frames support.
 
 ## Repository layout
 
@@ -36,7 +59,8 @@ colmap4d[model]`) — colmap4d never reimplements COLMAP's own parsers.
 spec/          the format specification (normative surface)
 src/colmap4d/  reference implementation
   sidecar.py     zero-dep read/write of times / points_t / time_meta
-  model.py       base model via pycolmap + sidecars (ModelView, validate_full)
+  colmap_io.py   zero-dep COLMAP base-model reader/writer (classic txt/bin)
+  model.py       base model + sidecars join (ModelView, load_model_view, validate_full)
   convert/       importers: the format's "writer" side
     per_frame_colmap.py   N per-frame COLMAP dirs -> one colmap4d model
   validate.py    graded checks (duplicate=ERROR, dangling=WARNING) + exit codes
