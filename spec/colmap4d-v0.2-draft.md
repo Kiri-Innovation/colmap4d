@@ -251,25 +251,74 @@ with the viewer, not part of the model.
 
 ---
 
-# Part III — Derived views (Informative, Optional) — *TODO, placeholder*
+# Part III — Derived views (Informative, Optional)
 
-- `groups.txt`: an OPTIONAL materialized pseudo-frame grouping. Canonical source of truth is
-  always `times` + a chosen ε, recomputable via `group_by_time(times, eps_ns)`. If persisted,
-  it MUST record its generation parameters (ε, method) and MAY drift from `times`; on drift,
-  `times` wins. Format to be specified here.
+A derived view is anything a tool can recompute from Part I data. It is never required and
+never authoritative; if a materialized derived file disagrees with the core sidecars, the
+**core sidecars win**. Materializing one is only a cache/convenience for consumers that want a
+particular slicing precomputed.
+
+## III.1 — `groups.txt` (pseudo-frame grouping)
+
+Some classic downstreams (per-instant multi-view triangulation, multi-view consistency losses)
+want "the images at a moment `t`". `groups.txt` OPTIONALLY materializes one such grouping. It
+is a pure function of `times` + a chosen ε (Part II.2), recomputable by
+`group_by_time(times, eps_ns)`, so it MUST record the parameters that produced it.
+
+On-disk format (text; same comment/whitespace rules as Part I sidecars):
+
+```
+# groups.txt — derived, eps_ns=8000000, method=greedy_window
+# GROUP_ID, T_CENTER_NS, IMAGE_IDS...
+1 1699999999130000000 3 17 42 88
+2 1699999999200000000 5 19 44 90
+```
+
+- The **header comment MUST record generation parameters**: at least `eps_ns` and `method`
+  (e.g. `greedy_window`, `kmeans`). Without them the grouping is not reproducible and MUST be
+  treated as opaque/untrusted.
+- Each data line: `GROUP_ID` (int ≥ 1), `T_CENTER_NS` (int64 ns, the group's representative
+  time — e.g. mean/median of members), then one or more `IMAGE_ID`s.
+- Grouping is a partition SHOULD-property: each image SHOULD appear in at most one group; an
+  image in no group is simply ungrouped for that ε.
+- A `groups.bin` MAY mirror this later; not defined in v1 (text only).
+- **Authority:** if `groups.txt` disagrees with recomputing from `times`+ε (e.g. `times` was
+  edited afterward), `times` wins and `groups.txt` MUST be regenerated. A consumer that cannot
+  verify the parameters SHOULD recompute rather than trust the file.
+
+The reference implementation exposes `colmap4d.groups.group_by_time(times, eps_ns)` (and will
+read/write `groups.txt`); it is a tool output, not part of the model's normative content.
 
 ---
 
-# Part IV — Ecosystem (Informative) — *TODO, placeholder*
+# Part IV — Ecosystem (Informative)
 
-- Reference implementation: zero-dependency `colmap4d.sidecar` (time layer) + `colmap4d.model`
-  (base model via optional `pycolmap`).
-- Converters (the "writer" side): per-frame-COLMAP ↔ single colmap4d, nerfstudio, Neu3D,
-  HyperNeRF, …
-- Viewer: 3D free view + time scrubber, ε-window camera gating, GPU time-kernel point
-  filtering, exposure Gantt chart.
-- Upstream strategy: propose per-image/frame timestamp fields to COLMAP; position colmap4d as
-  the transition-period reference implementation.
+colmap4d is adopted through tools, not through the spec — the spec earns trust, the tools earn
+adoption. The reference repo (`colmap4d/colmap4d`) is organized around three roles:
+
+- **Reference implementation (the reader/consumer entry).** `colmap4d.sidecar` is the
+  zero-dependency time layer; `colmap4d.colmap_io` is a zero-dependency COLMAP base-model
+  reader (classic txt/bin); `colmap4d.model` joins them into a `ModelView` and prefers
+  `pycolmap` when installed (optional extra `colmap4d[model]`) for authoritative parsing and
+  3.12 rigs/frames. `import colmap4d; colmap4d.load_model_view(dir)` reads a timestamped model
+  with no compiled dependency.
+- **Converters (the "writer" side — where the format's data comes from).** `colmap4d.convert`:
+  `per_frame_colmap` (N per-frame COLMAP dirs → one colmap4d model) is implemented; nerfstudio
+  `transforms.json`, Neu3D/DyNeRF, HyperNeRF/Nerfies are planned. Plus `colmap4d validate`
+  (graded ERROR/WARNING with exit codes).
+- **Viewer (the "why you'd want this" — a separate repo).** 3D free view + time scrubber,
+  ε-window camera gating, GPU time-kernel point filtering, exposure Gantt chart. Kept separate
+  for stack/build/cadence reasons; today the `ColmapUtil` React viewer (adjacent repo) is the
+  starting point and will be linked once published under the org.
+
+Datasets (a real non-synchronized capture with raw timestamps + offset samples, and a 4DGS
+loader patch) ship as `examples/` + release assets until there are enough to warrant their own
+`sample-data` repo.
+
+**Upstream strategy.** Propose per-image/frame timestamp fields to COLMAP (a repo Discussion,
+with this design + reference implementation). If accepted, colmap4d becomes the transition-period
+reference; if not, it holds the community-consensus direction. The public draft spec + repo
+Discussions are themselves the evidence chain for that proposal.
 
 ---
 
