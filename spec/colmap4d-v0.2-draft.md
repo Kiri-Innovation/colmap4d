@@ -184,14 +184,70 @@ inconsistently.
 
 ---
 
-# Part II — Best practices (Informative) — *TODO, placeholder*
+# Part II — Best practices (Informative)
 
-Planned RECOMMENDED conventions (non-binding):
-- Point timestamp = centroid of its track's observation times (white paper §3.3).
-- Default viewer ε ≳ `max(sync_err_ns)` across devices.
-- Filename conventions for the sidecar-less fallback ("filename as timestamp").
-- Heuristic device grouping when `camera_ids` is absent (filename-prefix fallback; a viewer
-  concern, documented with the viewer, and always labeled "inferred from filename" in UI).
+Everything in Part II is **informative and RECOMMENDED**, never binding. A model that ignores
+these conventions is still fully conformant; **conformance never checks Part II.** These are
+the choices a producer *should* make when the spec leaves room, so that independent tools
+converge on the same sensible defaults.
+
+## II.1 — Point timestamp: track-observation centroid (default)
+
+`points_t[p]` SHOULD be the **centroid (arithmetic mean) of the observation times** of point
+`p`'s track — i.e. the mean of `times[image_id]` over every image that observes `p`. This is
+the natural "when was this point seen" summary and matches the white paper's recommendation
+(§3.3). It degenerates correctly: a point whose observations all share one instant (e.g. one
+frame of a synchronized array) gets exactly that instant.
+
+Alternatives, for producers with a reason:
+- **Median** observation time — more robust when a track has a few outlier observations (e.g.
+  a mistaken match across distant frames); RECOMMENDED over the mean for long, noisy tracks.
+- **First observation** time — appropriate when `t` is meant as an "onset"/birth time rather
+  than a central tendency (e.g. event-like features).
+
+Whatever the choice, it is a summary of observations and MUST NOT be read as a life-span or a
+static/dynamic label (that is a render parameter / downstream concern, see Part I.A).
+
+## II.2 — Default ε for pseudo-frame grouping
+
+When a consumer must group images into pseudo-frames (Part III), it needs an ε (time window).
+`time_meta.devices[*].sync_err_ns` is the **physical lower bound**: you cannot resolve frames
+finer than the clock-alignment uncertainty. So the RECOMMENDED default is
+
+```
+ε_default = k · max(sync_err_ns over all devices),   k ≈ 2–5   (k = 3 suggested)
+```
+
+Rationale: grouping tighter than the sync error splits images that are physically simultaneous
+into different pseudo-frames (false negatives); `k` gives margin above the noise floor without
+merging genuinely distinct instants. If no `sync_err_ns` is declared, a consumer SHOULD fall
+back to a fraction of the median inter-image time gap and surface ε as a user control (the
+white paper's ε-slider). ε is always the *consumer's* choice per its motion scale (white paper
+Q2); this is only a starting default.
+
+## II.3 — Filename-as-timestamp fallback (no `times` sidecar)
+
+COLMAP imposes no constraints on image names, and neither does colmap4d — so this is a
+**best-practice fallback, never a protocol rule** (Part I only recognizes the `times` sidecar;
+if `times` exists it is authoritative and any filename heuristic MUST be ignored).
+
+When no `times` sidecar is present, a tool MAY infer an ordering/time from image names that
+encode it (e.g. `frame_000123.png`, `cam03/000042.jpg`, zero-padded sequence numbers). Such an
+inference SHOULD be surfaced as "inferred from filename", never presented as ground-truth time,
+and SHOULD be treated as ordinal (sequence) unless the names encode an actual physical time.
+
+This is a low-adoption-cost bridge: the `ColmapUtil` viewer already derives a per-image frame
+index from filenames (its `byRigFrame` colouring builds an image→frame-index map from names).
+A colmap4d-aware viewer can reuse exactly that path as the sidecar-less fallback, then upgrade
+to the real `times` sidecar when present.
+
+## II.4 — Heuristic device grouping when `camera_ids` is absent
+
+`time_meta.devices[*].camera_ids` is optional (Part I, OPEN-1). When it is absent but a viewer
+wants per-device rows (e.g. the exposure Gantt chart), it MAY group images by a filename prefix
+or embedded camera token (`cam03/...`, `camXX.png`). This grouping MUST be labeled "inferred
+from filename" in the UI and is never authoritative — it is a viewer convenience documented
+with the viewer, not part of the model.
 
 ---
 
