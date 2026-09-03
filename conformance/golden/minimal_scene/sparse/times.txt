@@ -1,0 +1,7 @@
+# colmap4d per-image timestamps (times sidecar), one line per image:
+#   IMAGE_ID, T_NS
+# T_NS is int64 nanoseconds; time convention and clock domain are declared in time_meta.json.
+# Number of images: 3
+1 1699999999123456789
+2 1699999999156789012
+3 1699999999140000000

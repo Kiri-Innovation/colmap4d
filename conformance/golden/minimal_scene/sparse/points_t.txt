@@ -1,0 +1,11 @@
+# colmap4d per-point timestamps (points_t sidecar), one line per point that HAS a timestamp:
+#   POINT3D_ID, T_NS
+# This is a PARTIAL map: points absent from this file are temporally-unbounded (present at all t).
+# Here POINT3D_ID 5 is intentionally omitted to exercise the temporally-unbounded rule.
+# T_NS values below are per-track-centroid (RECOMMENDED, not required by the spec).
+# Number of points with a timestamp: 5
+1 1699999999140081934
+2 1699999999140122901
+3 1699999999131728395
+4 1699999999148394506
+6 1699999999140081934

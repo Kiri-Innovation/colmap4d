@@ -1,0 +1,27 @@
+{
+  "colmap4d_spec": "0.2-draft",
+  "time_convention": "mid_exposure",
+  "time_unit": "ns",
+  "clock_domain": "utc_ntp",
+  "devices": {
+    "device_a": {
+      "camera_ids": [1],
+      "raw_clock": "android_boottime",
+      "sync_method": "lan_ntp",
+      "sync_err_ns": 3000000,
+      "offset_samples": [
+        [1699999999000000000, 4200000],
+        [1699999999500000000, 4250000]
+      ]
+    },
+    "device_b": {
+      "camera_ids": [2],
+      "raw_clock": "android_boottime",
+      "sync_method": "lan_ntp",
+      "sync_err_ns": 3500000,
+      "offset_samples": [
+        [1699999999000000000, -1200000]
+      ]
+    }
+  }
+}
