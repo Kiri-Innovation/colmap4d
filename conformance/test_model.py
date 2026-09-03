@@ -1,6 +1,7 @@
-"""Model-aware tests: the pycolmap-backed join of base model + sidecars.
+"""Model-aware tests: the base-model + sidecar join, and the pure-Python COLMAP reader.
 
-Skipped entirely when pycolmap is not installed (it is an optional dependency).
+These run with NO external dependency (the reader is pure Python). A small extra test
+exercises the pycolmap-backed path when pycolmap happens to be installed.
 """
 
 from __future__ import annotations
@@ -9,9 +10,7 @@ from pathlib import Path
 
 import pytest
 
-pytest.importorskip("pycolmap")
-
-from colmap4d import model, validate  # noqa: E402  (after importorskip)
+from colmap4d import colmap_io, model, validate
 
 GOLDEN = Path(__file__).parent / "golden"
 MIN_SCENE = GOLDEN / "minimal_scene" / "sparse"
@@ -20,12 +19,36 @@ DANGLING = GOLDEN / "dangling_ids" / "sparse"
 DUP_IDS = GOLDEN / "dup_ids" / "sparse"
 
 
-def test_read_reconstruction_counts():
-    rec = model.read_reconstruction(MIN_SCENE)
-    assert rec.num_images() == 3
-    assert rec.num_points3D() == 6
+# --------------------------------------------------------------------------- #
+# pure-Python base-model reader
+# --------------------------------------------------------------------------- #
+def test_read_base_model_txt():
+    m = model.read_base_model(MIN_SCENE)
+    assert m.image_ids() == {1, 2, 3}
+    assert m.point_ids() == {1, 2, 3, 4, 5, 6}
+    assert m.cameras[1].model == "PINHOLE"
+    assert m.images[1].name == "device_a/000001.jpg"
+    # 2D observation ids line up with points3D tracks
+    assert m.points3D[1].track[0] == (1, 0)
 
 
+def test_colmap_io_bin_roundtrip(tmp_path):
+    # Round-trip a hand-read txt model through the classic binary writers/readers.
+    m = colmap_io.read_model(MIN_SCENE)
+    colmap_io.write_cameras_bin(tmp_path / "cameras.bin", m.cameras)
+    colmap_io.write_images_bin(tmp_path / "images.bin", m.images)
+    colmap_io.write_points3D_bin(tmp_path / "points3D.bin", m.points3D)
+    back = colmap_io.read_model(tmp_path)  # bin preferred
+    assert back.image_ids() == m.image_ids()
+    assert back.point_ids() == m.point_ids()
+    assert back.cameras[1].params == m.cameras[1].params
+    assert back.images[1].name == m.images[1].name
+    assert back.points3D[6].track == m.points3D[6].track
+
+
+# --------------------------------------------------------------------------- #
+# ModelView join (zero-dep)
+# --------------------------------------------------------------------------- #
 def test_model_view_join_minimal_scene():
     mv = model.load_model_view(MIN_SCENE)
     assert mv.image_ids() == {1, 2, 3}
@@ -39,7 +62,6 @@ def test_model_view_join_minimal_scene():
     # point 5 has no points_t entry -> temporally-unbounded
     assert mv.point_time(5) is None
     assert mv.point_time(1) == 1699999999140081934
-    assert 5 not in mv.effective_points_t()
     assert set(mv.effective_points_t()) == {1, 2, 3, 4, 6}
 
 
@@ -60,12 +82,14 @@ def test_plain_colmap_all_timeless_via_model():
 
 
 def test_effective_points_t_drops_dangling():
-    # points_t references point 999, absent from the model -> dropped from effective view.
     mv = model.load_model_view(DANGLING)
     assert set(mv.effective_points_t()) == {1, 2}
     assert 999 not in mv.effective_points_t()
 
 
+# --------------------------------------------------------------------------- #
+# validate_full orchestration (zero-dep: model ids read in pure Python)
+# --------------------------------------------------------------------------- #
 def test_validate_full_flags_dangling_warning():
     problems = model.validate_full(DANGLING)
     dangling = [p for p in problems if p.code.endswith("dangling_id")]
@@ -83,3 +107,14 @@ def test_validate_full_flags_duplicate_error():
 
 def test_validate_full_clean_on_minimal_scene():
     assert validate.exit_code(model.validate_full(MIN_SCENE)) == 0
+
+
+# --------------------------------------------------------------------------- #
+# pycolmap-backed reader (only when installed)
+# --------------------------------------------------------------------------- #
+def test_read_reconstruction_matches_pure_python():
+    pytest.importorskip("pycolmap")
+    rec = model.read_reconstruction(MIN_SCENE)
+    assert rec.num_images() == 3
+    assert rec.num_points3D() == 6
+    assert {int(i) for i in rec.images} == model.read_base_model(MIN_SCENE).image_ids()

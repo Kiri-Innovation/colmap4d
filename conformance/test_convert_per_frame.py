@@ -58,7 +58,7 @@ def test_names_encode_frame_and_times_match_frame(tmp_path):
     out = tmp_path / "merged"
     convert_per_frame_colmap([FRAME_A, FRAME_B], out)
     mv = model.load_model_view(out)
-    names = {int(i): mv.reconstruction.images[i].name for i in mv.reconstruction.images}
+    names = {iid: im.name for iid, im in mv.base.images.items()}
     for iid, name in names.items():
         prefix = "frame_0000/" if mv.image_time(iid) == 0 else "frame_0001/"
         assert name.startswith(prefix)
