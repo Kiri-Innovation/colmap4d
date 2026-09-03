@@ -11,16 +11,17 @@ choices must be revisited before the spec leaves `v0.2-draft`.
 | OPEN-3 | Duplicate / dangling ids in a sidecar? | Tolerance is normative (spec I.D): writer MUST NOT duplicate, reader last-wins (opt-in strict); dangling permitted, consumer MUST ignore model-absent ids. `validate` grades duplicate=ERROR (non-zero exit), dangling=WARNING (exit 0, `--strict` promotes); dangling message names the SfM whole-model misalignment risk. | **settled** |
 | OPEN-4 | `IMAGE_ID`/`POINT3D_ID` unstable across SfM re-runs | sidecars share model-dir lifecycle, re-emitted by importer; no format change | settled |
 | OPEN-5 | empty vs absent `points_t` | equivalent (all points temporally-unbounded) | settled |
-| OPEN-6 | per-frame→single conversion: merge/dedup cross-frame points, or keep per-frame independent? | **Default = per-frame independent, NO cross-frame dedup** (white paper §3.3: honest dense sampling; dedup fabricates correspondences COLMAP never computed). `dedup_points=True` reserved but not implemented. | **needs user ratification** |
+| OPEN-6 | per-frame→single conversion: merge/dedup cross-frame points, or keep per-frame independent? | **Settled (author, per white paper Q3/§3.3): keep per-frame independent, NO cross-frame dedup.** Static structure is honestly sampled once per instant; cross-frame dedup is a derived view / downstream optimization, out of scope for v1. `dedup_points=True` stays reserved and refused. | **settled** |
 
-### OPEN-6 detail (awaiting user decision)
+### OPEN-6 detail (settled)
 The `per_frame_colmap` converter keeps every frame's points as independent xyzt samples
-(a static corner seen in 5 frames → 5 points at 5 times). This follows the white paper's
-stated behavior for per-frame import and "store observations, not conclusions". The
-alternative — matching the same physical point across frames into one point with a
-time range/centroid — is a lossy geometric heuristic and is deliberately NOT the default.
-**Question for the author:** should cross-frame dedup ever be offered (as an opt-in), and if
-so, what matching criterion? For now the converter refuses `dedup_points=True`.
+(a static corner seen in 5 frames → 5 points at 5 times). White paper Q3/§3.3: this is the
+honest dense sampling, and it is `N + const` in storage because within-frame duplication is
+already deduped by the track structure — per-frame COLMAP is `N × T` only if you keep whole
+frames, which is the *source* form, not ours. Cross-frame dedup (matching the same physical
+point across frames into one point with a time range) is a lossy geometric heuristic and a
+**derived view / downstream optimization**, explicitly out of scope for v1. `dedup_points=True`
+remains reserved and is refused by the converter with a pointer to this decision.
 
 ## Resolved since (now implemented)
 - Part II best practices, Part III `groups.txt` on-disk format, Part IV ecosystem — drafted.
