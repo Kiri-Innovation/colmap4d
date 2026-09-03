@@ -61,3 +61,20 @@ conformant.
 A standard COLMAP model with **no sidecars at all** (1 camera, 2 images, 2 points).
 Loading it as colmap4d MUST succeed and yield: empty `times`, empty `points_t`
 (⇒ all points temporally-unbounded), `time_meta == None`. No file-not-found error.
+
+## `dup_ids/` — duplicate id, canonical last-wins (spec I.D)
+
+`times.txt` lists `IMAGE_ID 2` twice. A conformant reader MUST resolve this **last-wins**:
+```
+times : 1 -> 1699999999100000000, 2 -> 1699999999155555555   (NOT ...120000000)
+```
+`validate` reports the duplicate as an **ERROR** (non-zero exit). A strict reader MAY
+instead raise. This pins every implementation to the same deterministic tolerance.
+
+## `dangling_ids/` — dangling id, consumer ignores, validate warns (spec I.D)
+
+`points_t.txt` references `POINT3D_ID 999`, absent from the model (points are 1 and 2).
+- The pure sidecar reader (no model) returns all three ids verbatim: `{1, 2, 999}`.
+- A model-aware consumer MUST ignore model-absent ids ⇒ effective `{1, 2}`.
+- `validate` reports 999 as a **WARNING** (exit 0; `--strict` promotes to failure), and the
+  message names the SfM whole-model misalignment risk, not merely "unknown id".

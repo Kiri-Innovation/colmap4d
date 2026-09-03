@@ -15,6 +15,8 @@ GOLDEN = Path(__file__).parent / "golden"
 MIN_SCENE = GOLDEN / "minimal_scene" / "sparse"
 PLAIN = GOLDEN / "plain_colmap" / "sparse"
 NO_DEVICES = GOLDEN / "no_devices" / "sparse"
+DUP_IDS = GOLDEN / "dup_ids" / "sparse"
+DANGLING = GOLDEN / "dangling_ids" / "sparse"
 
 EXPECTED_TIMES = {
     1: 1699999999123456789,
@@ -134,13 +136,84 @@ def test_validate_camera_ids_unique_flags_conflict():
     bad = {"devices": {"phone_a": {"camera_ids": [1, 2]}, "phone_b": {"camera_ids": [2]}}}
     problems = validate.check_device_camera_ids_unique(bad)
     assert len(problems) == 1
-    assert "CAMERA_ID 2" in problems[0]
+    assert problems[0].severity == validate.ERROR
+    assert "CAMERA_ID 2" in problems[0].message
 
 
 def test_validate_camera_ids_unique_tolerates_absent():
     assert validate.check_device_camera_ids_unique(None) == []
     assert validate.check_device_camera_ids_unique({}) == []
     assert validate.check_device_camera_ids_unique({"devices": {"x": {}}}) == []
+
+
+# --------------------------------------------------------------------------- #
+# OPEN-3: duplicate ids resolve last-wins (normative), dangling ids are ignored
+# by consumers but flagged by validate. Both tolerances are pinned by golden.
+# --------------------------------------------------------------------------- #
+def test_duplicate_id_reader_is_last_wins():
+    # Golden dup_ids/times.txt lists image 2 twice; the LAST value wins, deterministically.
+    times = sidecar.read_times_txt(DUP_IDS / "times.txt")
+    assert times == {1: 1699999999100000000, 2: 1699999999155555555}
+
+
+def test_duplicate_id_strict_reader_raises():
+    with pytest.raises(ValueError, match="duplicate id 2"):
+        sidecar.read_times_txt(DUP_IDS / "times.txt", strict=True)
+
+
+def test_duplicate_id_survives_bin_roundtrip_as_last_wins():
+    # Raw pairs preserve the duplicate; collapsing (here via .bin write/read) is last-wins.
+    pairs = sidecar.read_times_pairs(DUP_IDS / "times.txt")
+    assert pairs == [
+        (1, 1699999999100000000),
+        (2, 1699999999120000000),
+        (2, 1699999999155555555),
+    ]
+
+
+def test_validate_flags_duplicate_as_error():
+    pairs = sidecar.read_times_pairs(DUP_IDS / "times.txt")
+    problems = validate.check_duplicate_ids(pairs, "times")
+    assert len(problems) == 1
+    assert problems[0].severity == validate.ERROR
+    assert validate.exit_code(problems) == 1  # ERROR ⇒ non-zero, CI-catchable
+
+
+def test_dangling_id_raw_read_includes_it():
+    # The pure sidecar reader has no model, so it returns the dangling id verbatim.
+    pts = sidecar.read_points_t_txt(DANGLING / "points_t.txt")
+    assert set(pts) == {1, 2, 999}
+
+
+def test_dangling_id_consumer_ignores_model_absent():
+    # A model-aware consumer keeps only ids present in the model → {1, 2}.
+    pts = sidecar.read_points_t_txt(DANGLING / "points_t.txt")
+    model_point_ids = {1, 2}
+    effective = {k: v for k, v in pts.items() if k in model_point_ids}
+    assert set(effective) == {1, 2}
+
+
+def test_validate_flags_dangling_as_warning_with_sfm_hint():
+    pts = sidecar.read_points_t_txt(DANGLING / "points_t.txt")
+    problems = validate.check_dangling_ids(list(pts), {1, 2}, "points_t")
+    assert len(problems) == 1
+    assert problems[0].severity == validate.WARNING
+    assert "999" in problems[0].message
+    # Message must name the whole-model misalignment risk, not just "unknown id".
+    assert "re-run" in problems[0].message or "misalign" in problems[0].message
+    assert validate.exit_code(problems) == 0  # WARNING ⇒ exit 0 by default
+    assert validate.exit_code(problems, strict=True) == 1  # --strict promotes it
+
+
+def test_validate_orchestration_on_goldens():
+    # Clean goldens produce no ERROR; dup_ids produces an ERROR.
+    assert validate.exit_code(validate.validate(MIN_SCENE)) == 0
+    assert validate.exit_code(validate.validate(NO_DEVICES)) == 0
+    assert validate.exit_code(validate.validate(DUP_IDS)) == 1
+    # Dangling only surfaces when the model's id set is supplied.
+    dangling_problems = validate.validate(DANGLING, point_ids={1, 2})
+    assert validate.exit_code(dangling_problems) == 0
+    assert validate.exit_code(dangling_problems, strict=True) == 1
 
 
 # --------------------------------------------------------------------------- #

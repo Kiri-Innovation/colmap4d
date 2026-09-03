@@ -1,0 +1,8 @@
+# colmap4d times sidecar with an INTENTIONAL duplicate IMAGE_ID (2 appears twice).
+# This file is NOT spec-conformant to WRITE (writer MUST NOT emit duplicates), but a
+# READER must resolve it deterministically: last-wins. So image 2 -> 1699999999155555555
+# (the second occurrence), NOT 1699999999120000000.
+# Number of images: 2 (3 records)
+1 1699999999100000000
+2 1699999999120000000
+2 1699999999155555555

@@ -47,11 +47,11 @@ TIMELESS = None
 
 
 # --------------------------------------------------------------------------- #
-# text I/O
+# raw pair parsing (duplicates preserved) + normative collapse to a dict
 # --------------------------------------------------------------------------- #
-def _read_id_time_txt(path: str | Path) -> dict[int, int]:
-    """Parse a two-column ``ID T_NS`` text sidecar, skipping blank/# lines."""
-    out: dict[int, int] = {}
+def _parse_txt_pairs(path: str | Path) -> list[tuple[int, int]]:
+    """All ``(ID, T_NS)`` rows of a text sidecar, in file order, dups preserved."""
+    pairs: list[tuple[int, int]] = []
     with open(path, encoding="utf-8") as f:
         for raw in f:
             line = raw.strip()
@@ -60,8 +60,32 @@ def _read_id_time_txt(path: str | Path) -> dict[int, int]:
             parts = line.split()
             if len(parts) < 2:
                 raise ValueError(f"{path}: malformed line: {raw!r}")
-            key, t_ns = int(parts[0]), int(parts[1])
-            out[key] = t_ns
+            pairs.append((int(parts[0]), int(parts[1])))
+    return pairs
+
+
+def _parse_bin_pairs(path: str | Path, rec: struct.Struct) -> list[tuple[int, int]]:
+    """All ``(ID, T_NS)`` records of a binary sidecar, in file order, dups preserved."""
+    data = Path(path).read_bytes()
+    (count,) = _COUNT.unpack_from(data, 0)
+    off = _COUNT.size
+    pairs: list[tuple[int, int]] = []
+    for _ in range(count):
+        key, t_ns = rec.unpack_from(data, off)
+        pairs.append((key, t_ns))
+        off += rec.size
+    return pairs
+
+
+def _pairs_to_dict(pairs: list[tuple[int, int]], strict: bool, path: str | Path) -> dict[int, int]:
+    """Collapse raw pairs to id->t_ns. Duplicate ids resolve **last-wins** (spec Part I:
+    a writer MUST NOT emit duplicates; a reader SHOULD accept and take the last one).
+    ``strict=True`` opts into raising on a duplicate instead."""
+    out: dict[int, int] = {}
+    for key, t_ns in pairs:
+        if strict and key in out:
+            raise ValueError(f"{path}: duplicate id {key} (strict mode)")
+        out[key] = t_ns  # last-wins
     return out
 
 
@@ -70,21 +94,6 @@ def _write_id_time_txt(path: str | Path, mapping: dict[int, int], header: str) -
     for key in sorted(mapping):
         lines.append(f"{key} {mapping[key]}\n")
     Path(path).write_text("".join(lines), encoding="utf-8")
-
-
-# --------------------------------------------------------------------------- #
-# binary I/O
-# --------------------------------------------------------------------------- #
-def _read_id_time_bin(path: str | Path, rec: struct.Struct) -> dict[int, int]:
-    data = Path(path).read_bytes()
-    (count,) = _COUNT.unpack_from(data, 0)
-    off = _COUNT.size
-    out: dict[int, int] = {}
-    for _ in range(count):
-        key, t_ns = rec.unpack_from(data, off)
-        out[key] = t_ns
-        off += rec.size
-    return out
 
 
 def _write_id_time_bin(path: str | Path, mapping: dict[int, int], rec: struct.Struct) -> None:
@@ -97,14 +106,21 @@ def _write_id_time_bin(path: str | Path, mapping: dict[int, int], rec: struct.St
 # --------------------------------------------------------------------------- #
 # times
 # --------------------------------------------------------------------------- #
-def read_times_txt(path: str | Path) -> dict[int, int]:
-    """image_id -> t_ns, from times.txt."""
-    return _read_id_time_txt(path)
+def read_times_txt(path: str | Path, strict: bool = False) -> dict[int, int]:
+    """image_id -> t_ns, from times.txt (last-wins on dup ids; see :func:`_pairs_to_dict`)."""
+    return _pairs_to_dict(_parse_txt_pairs(path), strict, path)
 
 
-def read_times_bin(path: str | Path) -> dict[int, int]:
-    """image_id -> t_ns, from times.bin."""
-    return _read_id_time_bin(path, _TIMES_REC)
+def read_times_bin(path: str | Path, strict: bool = False) -> dict[int, int]:
+    """image_id -> t_ns, from times.bin (last-wins on dup ids)."""
+    return _pairs_to_dict(_parse_bin_pairs(path, _TIMES_REC), strict, path)
+
+
+def read_times_pairs(path: str | Path) -> list[tuple[int, int]]:
+    """Raw (image_id, t_ns) rows with duplicates preserved (for validation)."""
+    if str(path).endswith(".bin"):
+        return _parse_bin_pairs(path, _TIMES_REC)
+    return _parse_txt_pairs(path)
 
 
 def write_times_txt(path: str | Path, times: dict[int, int]) -> None:
@@ -122,14 +138,21 @@ def write_times_bin(path: str | Path, times: dict[int, int]) -> None:
 # --------------------------------------------------------------------------- #
 # points_t
 # --------------------------------------------------------------------------- #
-def read_points_t_txt(path: str | Path) -> dict[int, int]:
-    """point3d_id -> t_ns, from points_t.txt (PARTIAL map)."""
-    return _read_id_time_txt(path)
+def read_points_t_txt(path: str | Path, strict: bool = False) -> dict[int, int]:
+    """point3d_id -> t_ns, from points_t.txt (PARTIAL map; last-wins on dup ids)."""
+    return _pairs_to_dict(_parse_txt_pairs(path), strict, path)
 
 
-def read_points_t_bin(path: str | Path) -> dict[int, int]:
-    """point3d_id -> t_ns, from points_t.bin (PARTIAL map)."""
-    return _read_id_time_bin(path, _POINTS_T_REC)
+def read_points_t_bin(path: str | Path, strict: bool = False) -> dict[int, int]:
+    """point3d_id -> t_ns, from points_t.bin (PARTIAL map; last-wins on dup ids)."""
+    return _pairs_to_dict(_parse_bin_pairs(path, _POINTS_T_REC), strict, path)
+
+
+def read_points_t_pairs(path: str | Path) -> list[tuple[int, int]]:
+    """Raw (point3d_id, t_ns) rows with duplicates preserved (for validation)."""
+    if str(path).endswith(".bin"):
+        return _parse_bin_pairs(path, _POINTS_T_REC)
+    return _parse_txt_pairs(path)
 
 
 def write_points_t_txt(path: str | Path, points_t: dict[int, int]) -> None:
@@ -192,24 +215,30 @@ class Sidecars:
         return min(vals) if vals else None
 
 
-def load_sidecars(model_dir: str | Path) -> Sidecars:
+def load_sidecars(model_dir: str | Path, strict: bool = False) -> Sidecars:
     """Load the time sidecars from a COLMAP sparse model directory.
 
     Binary is preferred over text when both are present (matching COLMAP). Missing
-    sidecars are treated as empty, never as an error.
+    sidecars are treated as empty, never as an error. Duplicate ids resolve last-wins
+    (spec Part I); pass ``strict=True`` to raise on a duplicate instead.
+
+    Note: this reader does not know the base model, so it cannot drop ids that are
+    absent from the model. Ignoring model-absent (dangling) ids is the consuming
+    layer's job (spec Part I: a reader MUST ignore ids not present in the model); see
+    ``colmap4d.model`` and ``colmap4d.validate``.
     """
     d = Path(model_dir)
     sc = Sidecars()
 
     if (d / TIMES_BIN).exists():
-        sc.times = read_times_bin(d / TIMES_BIN)
+        sc.times = read_times_bin(d / TIMES_BIN, strict=strict)
     elif (d / TIMES_TXT).exists():
-        sc.times = read_times_txt(d / TIMES_TXT)
+        sc.times = read_times_txt(d / TIMES_TXT, strict=strict)
 
     if (d / POINTS_T_BIN).exists():
-        sc.points_t = read_points_t_bin(d / POINTS_T_BIN)
+        sc.points_t = read_points_t_bin(d / POINTS_T_BIN, strict=strict)
     elif (d / POINTS_T_TXT).exists():
-        sc.points_t = read_points_t_txt(d / POINTS_T_TXT)
+        sc.points_t = read_points_t_txt(d / POINTS_T_TXT, strict=strict)
 
     if (d / TIME_META_JSON).exists():
         sc.time_meta = read_time_meta(d / TIME_META_JSON)

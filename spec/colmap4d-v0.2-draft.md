@@ -63,8 +63,28 @@ General rules:
   forms of the same sidecar are present, a reader MUST prefer `.bin` (matching COLMAP).
 - `time_meta` is JSON only; there is no binary form.
 - Text sidecars: lines beginning with `#` and blank lines are comments and MUST be ignored;
-  fields are whitespace-separated; a sidecar MUST NOT contain two records with the same id.
+  fields are whitespace-separated.
 - Record ordering within a sidecar is NOT normative; a reader MUST NOT depend on it.
+
+### Duplicate and dangling ids (reader tolerance is normative) — **FROZEN (I.D)**
+
+Reader tolerance is specified, not left to implementations: if one reader took first-wins
+and another last-wins, the same file would yield two different timestamps — a silent data
+divergence, worse than a crash.
+
+- **Duplicate id.** A writer MUST NOT emit two records with the same id in one sidecar. A
+  reader SHOULD accept such a file and resolve duplicates **last-wins** (the last occurrence
+  in file order is authoritative). A reader MAY offer a strict mode that rejects duplicates
+  instead. `validate` reports a duplicate as an **ERROR** (a writer-side bug; the shadowed
+  timestamps are lost).
+- **Dangling id.** A sidecar MAY reference an id absent from the base model — this is *not*
+  forbidden (legitimate use: keeping a sidecar as a superset of a filtered/subset model). A
+  consuming reader (one that has the base model) MUST ignore ids not present in the model.
+  `validate` reports dangling ids as a **WARNING** by default, promotable to failure under
+  `--strict`. The warning MUST name the real hazard: after an SfM re-run, the danger is not
+  the id that vanished but a surviving id now pointing at a *different* entity (a silently
+  mislabeled timestamp) — a dangling id is often its only visible symptom, so the fix is to
+  regenerate the sidecar, not to trust the survivors.
 
 ## I.A — `points_t` is a partial map; missing points are temporally-unbounded — **FROZEN**
 
@@ -78,9 +98,8 @@ entry.
 - An absent `points_t` sidecar is equivalent to an empty one: **every** point is
   temporally-unbounded. This is what makes a plain COLMAP model render as fully static in a
   colmap4d viewer (the backward-compatibility baseline).
-- `points_t` MAY reference only a subset of the model's points, and every key SHOULD
-  correspond to an existing `POINT3D_ID` (dangling keys are a `validate` warning, not a
-  parse error).
+- `points_t` MAY reference only a subset of the model's points; it MAY also carry ids absent
+  from the model. Duplicate and dangling ids are governed by I.D below.
 
 `times` (per-image) is, by contrast, expected to cover images that carry a timestamp; an
 image absent from `times` simply has no known time (same null semantics), but per-image
@@ -213,9 +232,11 @@ also `docs/open-questions.md`.
 - **OPEN-2 (`t0` domain).** `t0` is defined as the min over `times` ∪ `points_t`. A track
   centroid normally lies within its images' time span, so this usually equals min(`times`),
   but the union is used to stay well-defined when only one sidecar is present.
-- **OPEN-3 (duplicate / dangling ids).** Duplicate ids in a sidecar are forbidden (MUST NOT);
-  the reference reader currently last-wins rather than erroring — should `validate` hard-fail?
-  Dangling keys (id not in base model) are a `validate` warning, deferred to `validate.py`.
+- **OPEN-3 (duplicate / dangling ids).** *Settled (see I.D): tolerance is normative, not
+  implementation-defined.* Writers MUST NOT duplicate ids; readers accept last-wins (optional
+  strict mode). Dangling ids are permitted; consumers MUST ignore model-absent ids. `validate`
+  grades duplicate = ERROR (non-zero exit), dangling = WARNING (exit 0, `--strict` promotes),
+  with the dangling message naming the SfM whole-model misalignment risk.
 - **OPEN-4 (id stability).** COLMAP `IMAGE_ID`/`POINT3D_ID` are not stable across re-runs of
   SfM (white paper §6). Mitigation of record: sidecars share the model directory's lifecycle
   and are (re)produced by the importer together with the model. No format change; noted so

@@ -1,0 +1,8 @@
+# colmap4d points_t sidecar with an INTENTIONAL dangling id: POINT3D_ID 999 is not in
+# the model (points3D has only 1 and 2). Dangling ids are permitted (legitimate use: a
+# sidecar kept as a superset of a filtered model). A consumer MUST ignore ids not present
+# in the model, so the model-aware result is {1, 2}; validate reports 999 as a WARNING.
+# Number of points with a timestamp: 3 (one dangling)
+1 1699999999116666666
+2 1699999999116666666
+999 1699999999116666666
