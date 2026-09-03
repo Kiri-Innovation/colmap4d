@@ -1,0 +1,5 @@
+# colmap4d per-point timestamps (points_t sidecar): POINT3D_ID, T_NS (int64 ns)
+# PARTIAL map; absent point == temporally-unbounded.
+# Number of points with a timestamp: 2
+1 1699999999116666666
+2 1699999999116666666

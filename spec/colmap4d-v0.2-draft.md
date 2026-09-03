@@ -127,18 +127,31 @@ axis. Top-level fields:
 | `clock_domain` | MUST | string | semantics of the integer, e.g. `"utc_ntp"`, `"utc_gps"`, `"monotonic_boot"`. |
 | `devices` | MAY | object | map of `device_id → device object` (below). |
 
+**`devices` is provenance, not a conformance gate.** A capture "device" is a concept
+colmap4d introduces in `time_meta`; the host format has no corresponding entity (not even
+COLMAP's `rigs`/`frames`). The core promise is only "one `t` per image, one `t` per point" —
+device attribution is *where a timestamp came from*, not the timestamp itself. Therefore the
+MUST layer fully tolerates `devices` being absent, present-but-empty, or arbitrarily shaped,
+and **conformance does not check it**. Models converted from data with no device concept
+(Neu3D, HyperNeRF, …) are fully conformant with no `devices` at all.
+
 Each **device object** (all fields OPTIONAL, provenance for one capture device):
 
-| field | type | meaning |
-|-------|------|---------|
-| `camera_ids` | array<int> | COLMAP `CAMERA_ID`s produced by this device — the device↔model binding (see OPEN-1). |
-| `raw_clock` | string | device's native clock, e.g. `"android_boottime"`. |
-| `sync_method` | string | how the device clock was aligned, e.g. `"lan_ntp"`. |
-| `sync_err_ns` | int | estimated clock-alignment uncertainty in ns. Surfaced to downstream as an observation-noise input; also the natural lower bound for a viewer's default ε (Part II). |
-| `offset_samples` | array<[int, int]> | raw `[t_mono_ns, offset_ns]` clock-offset observations ("store observations, not conclusions"; enables re-solving drift later). |
+| field | req. | type | meaning |
+|-------|------|------|---------|
+| `camera_ids` | MAY | array<int> | COLMAP `CAMERA_ID`s produced by this device. Direction is device → `[CAMERA_ID, …]`, one-to-**many** (one phone that zooms or is split across segmented SfM runs yields several cameras). This is a provenance hint, not a required binding; when absent, tools MAY infer device grouping heuristically (see Part II / viewer docs) but correctness is not guaranteed. |
+| `raw_clock` | MAY | string | device's native clock, e.g. `"android_boottime"`. |
+| `sync_method` | MAY | string | how the device clock was aligned, e.g. `"lan_ntp"`. |
+| `sync_err_ns` | MAY | int | estimated clock-alignment uncertainty in ns. Surfaced to downstream as an observation-noise input; also the natural lower bound for a viewer's default ε (Part II). |
+| `offset_samples` | MAY | array<[int, int]> | raw `[t_mono_ns, offset_ns]` clock-offset observations ("store observations, not conclusions"; enables re-solving drift later). |
 
 A reader MUST tolerate unknown top-level and unknown device fields (forward compatibility):
 ignore, do not error.
+
+**Consistency rule (checked by `validate`, not by conformance).** If `camera_ids` are
+present, a given `CAMERA_ID` MUST appear under at most one device — one image cannot be
+timestamped by two clocks. `MAY` means the field is optional to write, not free to write
+inconsistently.
 
 ### Explicitly NOT in Part I (by decision)
 
@@ -158,7 +171,8 @@ Planned RECOMMENDED conventions (non-binding):
 - Point timestamp = centroid of its track's observation times (white paper §3.3).
 - Default viewer ε ≳ `max(sync_err_ns)` across devices.
 - Filename conventions for the sidecar-less fallback ("filename as timestamp").
-- Device↔camera binding recommendation (pending OPEN-1).
+- Heuristic device grouping when `camera_ids` is absent (filename-prefix fallback; a viewer
+  concern, documented with the viewer, and always labeled "inferred from filename" in UI).
 
 ---
 
@@ -190,11 +204,12 @@ These were found by hand-writing `conformance/golden/minimal_scene/` and forcing
 ambiguity to a decision. Provisional choices are marked; revisit before leaving draft. See
 also `docs/open-questions.md`.
 
-- **OPEN-1 (device↔model binding).** `time_meta.devices` is keyed by a free string
-  (`"device_a"`), but images reference `CAMERA_ID`. The golden binds them via a
-  `camera_ids: [..]` array on each device object. *Provisional* — alternatives: derive from
-  image NAME prefixes, or an explicit `image_id → device` map. Needed for the Gantt chart
-  (one row per device).
+- **OPEN-1 (device↔model binding).** *Settled: device attribution stays out of the core
+  protocol.* "Device" is a `time_meta` provenance concept with no host-format entity, so it
+  cannot be a conformance gate. `camera_ids` is retained as an optional device→`[CAMERA_ID]`
+  (one-to-many) hint (MAY, not conformance-checked); `validate` enforces that a `CAMERA_ID`
+  appears under at most one device. When absent, a viewer MAY infer grouping by filename
+  prefix, labeled "inferred". See the `time_meta` section above.
 - **OPEN-2 (`t0` domain).** `t0` is defined as the min over `times` ∪ `points_t`. A track
   centroid normally lies within its images' time span, so this usually equals min(`times`),
   but the union is used to stay well-defined when only one sidecar is present.

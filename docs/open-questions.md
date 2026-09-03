@@ -6,7 +6,7 @@ choices must be revisited before the spec leaves `v0.2-draft`.
 
 | id | question | current decision | status |
 |----|----------|------------------|--------|
-| OPEN-1 | How do `time_meta.devices` (string-keyed) bind to the COLMAP model? | `camera_ids: [..]` array per device object | provisional |
+| OPEN-1 | How do `time_meta.devices` (string-keyed) bind to the COLMAP model? | Device attribution stays OUT of the core protocol; `camera_ids` kept as optional device→[CAMERA_ID] hint (MAY, not conformance-checked), `validate` enforces one-device-per-camera; viewer may infer by filename when absent. | **settled** |
 | OPEN-2 | What is `t0` for the rebase contract? | `min` over `times` ∪ `points_t`; not stored | settled, minor |
 | OPEN-3 | Duplicate / dangling ids in a sidecar? | duplicates MUST NOT occur (reader last-wins for now); dangling keys = `validate` warning | deferred to validate.py |
 | OPEN-4 | `IMAGE_ID`/`POINT3D_ID` unstable across SfM re-runs | sidecars share model-dir lifecycle, re-emitted by importer; no format change | settled |

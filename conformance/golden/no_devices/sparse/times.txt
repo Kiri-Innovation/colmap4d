@@ -1,0 +1,4 @@
+# colmap4d per-image timestamps (times sidecar): IMAGE_ID, T_NS (int64 ns)
+# Number of images: 2
+1 1699999999100000000
+2 1699999999133333333

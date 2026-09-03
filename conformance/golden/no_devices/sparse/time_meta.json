@@ -1,0 +1,6 @@
+{
+  "colmap4d_spec": "0.2-draft",
+  "time_convention": "mid_exposure",
+  "time_unit": "ns",
+  "clock_domain": "utc_ntp"
+}

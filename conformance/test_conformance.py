@@ -9,11 +9,12 @@ from pathlib import Path
 
 import pytest
 
-from colmap4d import sidecar
+from colmap4d import sidecar, validate
 
 GOLDEN = Path(__file__).parent / "golden"
 MIN_SCENE = GOLDEN / "minimal_scene" / "sparse"
 PLAIN = GOLDEN / "plain_colmap" / "sparse"
+NO_DEVICES = GOLDEN / "no_devices" / "sparse"
 
 EXPECTED_TIMES = {
     1: 1699999999123456789,
@@ -102,6 +103,44 @@ def test_time_meta_golden():
     assert set(meta["devices"]) == {"device_a", "device_b"}
     assert meta["devices"]["device_a"]["camera_ids"] == [1]
     assert meta["devices"]["device_a"]["sync_err_ns"] == 3000000
+
+
+# --------------------------------------------------------------------------- #
+# device attribution is optional provenance (spec Part I, OPEN-1 settled):
+# a model WITH camera_ids and a model WITHOUT devices are both conformant.
+# --------------------------------------------------------------------------- #
+def test_with_camera_ids_is_conformant():
+    # minimal_scene carries devices+camera_ids; sidecar layer is agnostic to it.
+    sc = sidecar.load_sidecars(MIN_SCENE)
+    assert sc.time_meta["devices"]["device_b"]["camera_ids"] == [2]
+    assert sc.times == EXPECTED_TIMES  # time layer unaffected by device metadata
+
+
+def test_without_devices_is_conformant():
+    sc = sidecar.load_sidecars(NO_DEVICES)
+    assert "devices" not in sc.time_meta  # device-less (e.g. converted from Neu3D)
+    assert sc.time_meta["time_convention"] == "mid_exposure"
+    assert sc.times == {1: 1699999999100000000, 2: 1699999999133333333}
+    assert sc.point_time(1) == 1699999999116666666
+
+
+def test_validate_camera_ids_unique_passes_on_goldens():
+    for d in (MIN_SCENE, NO_DEVICES):
+        meta = sidecar.load_sidecars(d).time_meta
+        assert validate.check_device_camera_ids_unique(meta) == []
+
+
+def test_validate_camera_ids_unique_flags_conflict():
+    bad = {"devices": {"phone_a": {"camera_ids": [1, 2]}, "phone_b": {"camera_ids": [2]}}}
+    problems = validate.check_device_camera_ids_unique(bad)
+    assert len(problems) == 1
+    assert "CAMERA_ID 2" in problems[0]
+
+
+def test_validate_camera_ids_unique_tolerates_absent():
+    assert validate.check_device_camera_ids_unique(None) == []
+    assert validate.check_device_camera_ids_unique({}) == []
+    assert validate.check_device_camera_ids_unique({"devices": {"x": {}}}) == []
 
 
 # --------------------------------------------------------------------------- #
