@@ -36,9 +36,10 @@ colmap4d[model]`) — colmap4d never reimplements COLMAP's own parsers.
 spec/          the format specification (normative surface)
 src/colmap4d/  reference implementation
   sidecar.py     zero-dep read/write of times / points_t / time_meta
-  model.py       base model via pycolmap + sidecars           (placeholder)
-  convert/       importers: the format's "writer" side        (placeholder)
-  validate.py    coverage / monotonicity / clock-domain checks (placeholder)
+  model.py       base model via pycolmap + sidecars (ModelView, validate_full)
+  convert/       importers: the format's "writer" side
+    per_frame_colmap.py   N per-frame COLMAP dirs -> one colmap4d model
+  validate.py    graded checks (duplicate=ERROR, dangling=WARNING) + exit codes
   groups.py      derived pseudo-frame grouping                 (placeholder)
 conformance/   hand-authored golden models + tests (the executable spec)
 docs/          open questions, notes
