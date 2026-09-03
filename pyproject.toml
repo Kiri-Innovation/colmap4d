@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "colmap4d"
+version = "0.2.0.dev0"
+description = "Standard COLMAP sparse model + per-image and per-point timestamps (x, y, z, t)."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "Apache-2.0" }
+authors = [{ name = "colmap4d authors" }]
+keywords = ["colmap", "sfm", "4d", "dynamic-scene", "gaussian-splatting"]
+# Core (sidecar layer) is dependency-free — standard library only.
+dependencies = []
+
+[project.optional-dependencies]
+# Base-model parsing (cameras/images/points3D) is delegated to pycolmap.
+model = ["pycolmap>=0.6"]
+dev = ["pytest>=7", "ruff>=0.4"]
+
+[project.urls]
+Homepage = "https://github.com/colmap4d/colmap4d"
+Specification = "https://github.com/colmap4d/colmap4d/blob/main/spec/colmap4d-v0.2-draft.md"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+# src layout + conformance tests live outside the package.
+pythonpath = ["src"]
+testpaths = ["conformance"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "conformance"]
+# Ruff formats Python snippets embedded in Markdown; keep prose/docs as authored.
+extend-exclude = ["*.md"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ARG"]

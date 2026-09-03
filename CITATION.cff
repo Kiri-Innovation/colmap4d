@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: "If you use colmap4d, please cite it using these metadata."
+title: "colmap4d: a timestamped extension of the COLMAP sparse model for 4D data"
+abstract: >-
+  colmap4d extends a standard COLMAP sparse model with per-image and per-point
+  timestamps, modeling each image and point as an independent spacetime sample
+  (x, y, z, t), with strict backward compatibility.
+authors:
+  - name: "colmap4d authors"
+version: 0.2.0-draft
+license: Apache-2.0
+repository-code: "https://github.com/colmap4d/colmap4d"
+keywords:
+  - COLMAP
+  - structure-from-motion
+  - 4D reconstruction
+  - dynamic scenes
+  - Gaussian splatting
+# TODO: add DOI / preprint once the tech report (grown from the white paper) is published.
