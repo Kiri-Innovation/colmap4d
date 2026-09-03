@@ -7,6 +7,12 @@ dependency, not implemented yet).
 
 from __future__ import annotations
 
+from colmap4d.model import (
+    ModelView,
+    load_model_view,
+    read_base_model,
+    validate_full,
+)
 from colmap4d.sidecar import (
     TIMELESS,
     Sidecars,
@@ -29,9 +35,13 @@ __version__ = "0.2.0.dev0"
 
 __all__ = [
     "TIMELESS",
+    "ModelView",
     "Sidecars",
     "is_temporally_unbounded",
+    "load_model_view",
     "load_sidecars",
+    "read_base_model",
+    "validate_full",
     "rebase_to_seconds_f32",
     "read_points_t_bin",
     "read_points_t_txt",
