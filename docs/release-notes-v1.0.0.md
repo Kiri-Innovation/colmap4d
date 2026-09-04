@@ -12,8 +12,8 @@ The **spec is frozen at v1.0.** Part I (`I.A`–`I.E`) and the conformance golde
 `conformance/golden/` are **normative**: a reader/writer is conformant iff it satisfies Part I and
 reads the goldens to their documented values. From here, the format evolves only by the
 `points_t_method` precedent — **new optional fields/layers** (readers already MUST tolerate unknown
-fields), each logged in [`spec/CHANGELOG.md`](../spec/CHANGELOG.md) — never a change to, or removal
-of, an existing rule.
+fields), each logged in [`spec/CHANGELOG.md`](https://github.com/Kiri-Innovation/colmap4d/blob/main/spec/CHANGELOG.md)
+— never a change to, or removal of, an existing rule.
 
 What's normative, in one breath: `points_t` is a partial map (missing point = present at all `t`);
 timestamps are signed int64 nanoseconds with a derived, unstored `t0`; `time_meta.json` declares
@@ -38,4 +38,4 @@ adds pycolmap for authoritative parsing.
 colmap4d is an independent, community extension built entirely on top of **COLMAP**'s sparse
 model format — with deep gratitude to the COLMAP authors and community. It is not affiliated with
 or endorsed by the COLMAP project; it extends their format and stays strictly backward compatible
-with it. The design is documented in [`spec/colmap4d-v1.0.md`](../spec/colmap4d-v1.0.md).
+with it. The design is documented in [`spec/colmap4d-v1.0.md`](https://github.com/Kiri-Innovation/colmap4d/blob/main/spec/colmap4d-v1.0.md).
