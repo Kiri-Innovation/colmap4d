@@ -9,6 +9,7 @@ Two layers:
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
@@ -25,8 +26,15 @@ GOLDEN = Path(__file__).parent / "golden"
 FRAME_A = GOLDEN / "plain_colmap" / "sparse"  # 1 cam, 2 imgs, 2 pts
 FRAME_B = GOLDEN / "no_devices" / "sparse"  # 1 cam, 2 imgs, 2 pts
 
-REAL_BASE = Path("/home/ubuntu/tmp/cook_subset_5f/cook_subset")
-REAL_FRAMES = [REAL_BASE / f"colmap_{i}" / "sparse" / "0" for i in range(5)]
+# Real-data fixture: point COLMAP4D_REAL_FRAMES_DIR at a directory containing
+# per-frame models (colmap_0/sparse/0, colmap_1/sparse/0, ...). Tests skip
+# when unset — no machine-specific path is hardcoded here.
+_REAL_FRAMES_DIR = os.environ.get("COLMAP4D_REAL_FRAMES_DIR")
+REAL_FRAMES = (
+    [Path(_REAL_FRAMES_DIR) / f"colmap_{i}" / "sparse" / "0" for i in range(5)]
+    if _REAL_FRAMES_DIR
+    else None
+)
 
 
 # --------------------------------------------------------------------------- #
@@ -88,7 +96,7 @@ def test_frame_times_length_mismatch_raises(tmp_path):
 # --------------------------------------------------------------------------- #
 # real data (skipped when the fixture is absent)
 # --------------------------------------------------------------------------- #
-_HAVE_REAL = all(d.exists() for d in REAL_FRAMES)
+_HAVE_REAL = bool(REAL_FRAMES) and all(d.exists() for d in REAL_FRAMES)
 
 
 @pytest.mark.skipif(not _HAVE_REAL, reason="cook_subset fixture not present")
