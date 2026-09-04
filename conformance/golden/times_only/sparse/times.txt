@@ -1,0 +1,3 @@
+# colmap4d times, no time_meta: timestamps are relative time of undeclared semantics (spec I.C)
+1 1699999999100000000
+2 1699999999133333333

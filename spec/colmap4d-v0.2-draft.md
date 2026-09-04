@@ -167,6 +167,22 @@ Each **device object** (all fields OPTIONAL, provenance for one capture device):
 A reader MUST tolerate unknown top-level and unknown device fields (forward compatibility):
 ignore, do not error.
 
+### `time_meta` absent — undeclared relative time
+
+When a `times` sidecar exists, `time_meta.json` SHOULD accompany it. When it does **not**, the
+timestamps are still valid but carry **no declared semantics**: a consumer MUST treat them as
+*relative time of undeclared clock domain and exposure convention*. Concretely, a consumer:
+
+- MAY order images/points by `t` and take differences within the one model (the numbers are a
+  monotonic time axis);
+- MUST NOT compare these timestamps against another model's, or against wall-clock/epoch time
+  (the clock domain is unknown — the values may be epoch ns, a device boot clock, or synthetic);
+- MUST NOT assert a `clock_domain` or `time_convention` (e.g. mid-exposure) that was not declared.
+
+`validate` reports a **WARNING** when `times` is present but `time_meta` is absent (a producer
+SHOULD declare provenance); it is not an error, because timestamp-only models are legitimate
+(e.g. quick conversions) and remain fully usable as a relative axis.
+
 **Consistency rule (checked by `validate`, not by conformance).** If `camera_ids` are
 present, a given `CAMERA_ID` MUST appear under at most one device — one image cannot be
 timestamped by two clocks. `MAY` means the field is optional to write, not free to write
