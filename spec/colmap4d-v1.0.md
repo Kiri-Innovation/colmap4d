@@ -1,9 +1,9 @@
-# colmap4d format specification — v0.2-draft
+# colmap4d format specification — v1.0
 
-> Status: **DRAFT**, not frozen. Only the three Part I rules marked **FROZEN** below are
-> settled enough to build code against (this is the WP0 freeze gate); everything else is a
-> placeholder or subject to change. Do not tag v1.0 or treat conformance goldens as
-> normative until this document leaves draft.
+> Status: **v1.0 — frozen.** Part I and the conformance goldens in `conformance/golden/` are
+> normative. Changes follow `spec/CHANGELOG.md` under the `points_t_method` precedent: future
+> additions are new **optional** fields/layers only (readers already MUST tolerate unknown
+> fields), never a change to or removal of an existing rule.
 
 ## What colmap4d is
 
@@ -69,7 +69,7 @@ General rules:
   fields are whitespace-separated.
 - Record ordering within a sidecar is NOT normative; a reader MUST NOT depend on it.
 
-## I.A — `points_t` is a partial map; missing points are temporally-unbounded — **FROZEN**
+## I.A — `points_t` is a partial map; missing points are temporally-unbounded
 
 `points_t` maps `POINT3D_ID → T_NS`. It is a **partial map**: a sparse point MAY have no
 entry.
@@ -97,7 +97,7 @@ given capture, per-image coverage is normally complete — an observation, not a
 > must not be read as, a static/dynamic classification** — deciding what is background is the
 > job of downstream reconstruction, not of this format. See white paper §3.3, Q4, Q6.
 
-## I.B — Timestamps are int64 nanoseconds; `t0` is derived, not stored — **FROZEN**
+## I.B — Timestamps are int64 nanoseconds; `t0` is derived, not stored
 
 Part I governs only the **storage layer**. How a consumer rebases for rendering is a best
 practice (II.5), not a protocol obligation — Part I imposes no MUST on any consumer
@@ -121,14 +121,14 @@ rendering/compute process.
   a dangling id carries an early timestamp. Storing t0 is forbidden (it would be a second,
   drift-prone copy).
 
-## I.C — `time_meta.json` fields — **FROZEN (top-level field set)**
+## I.C — `time_meta.json` fields
 
 `time_meta.json` is a single JSON object recording the semantics and provenance of the time
 axis. Top-level fields:
 
 | field | req. | type | meaning |
 |-------|------|------|---------|
-| `colmap4d_spec` | SHOULD | string | spec version the file targets, e.g. `"0.2-draft"` |
+| `colmap4d_spec` | SHOULD | string | spec version the file targets, e.g. `"1.0"` |
 | `time_convention` | MUST | string | how each image's `t` is defined. MUST be `"mid_exposure"` in v1 (the only defined value); reserved others may follow. |
 | `time_unit` | SHOULD | string | MUST be `"ns"` if present (informational; `T_NS` is always ns). |
 | `clock_domain` | MUST | string | semantics of the integer, e.g. `"utc_ntp"`, `"utc_gps"`, `"monotonic_boot"`. |
@@ -184,7 +184,7 @@ present, a given `CAMERA_ID` MUST appear under at most one device — one image 
 timestamped by two clocks. `MAY` means the field is optional to write, not free to write
 inconsistently.
 
-## I.D — Duplicate and dangling ids (reader tolerance is normative) — **FROZEN**
+## I.D — Duplicate and dangling ids (reader tolerance is normative)
 
 Reader tolerance is specified, not left to implementations: if one reader took first-wins
 and another last-wins, the same file would yield two different timestamps — a silent data
@@ -204,7 +204,7 @@ divergence, worse than a crash.
   mislabeled timestamp) — a dangling id is often its only visible symptom, so the fix is to
   regenerate the sidecar, not to trust the survivors.
 
-## I.E — Binary sidecar layout — **FROZEN**
+## I.E — Binary sidecar layout
 
 `times.bin` and `points_t.bin` are the binary forms of `times` / `points_t` (a reader MUST
 prefer `.bin` when both forms are present). All integers are **little-endian**. Each file is a

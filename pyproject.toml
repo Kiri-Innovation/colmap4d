@@ -4,13 +4,26 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "colmap4d"
-version = "0.2.0.dev0"
+version = "1.0.0"
 description = "Standard COLMAP sparse model + per-image and per-point timestamps (x, y, z, t)."
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "Apache-2.0" }
 authors = [{ name = "colmap4d authors" }]
 keywords = ["colmap", "sfm", "4d", "dynamic-scene", "gaussian-splatting"]
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Intended Audience :: Science/Research",
+  "Topic :: Scientific/Engineering :: Image Recognition",
+  "Topic :: Multimedia :: Graphics :: 3D Modeling",
+  "Operating System :: OS Independent",
+]
 # Core (sidecar layer) is dependency-free — standard library only.
 dependencies = []
 
@@ -21,7 +34,9 @@ dev = ["pytest>=7", "ruff>=0.4"]
 
 [project.urls]
 Homepage = "https://github.com/colmap4d/colmap4d"
-Specification = "https://github.com/colmap4d/colmap4d/blob/main/spec/colmap4d-v0.2-draft.md"
+Repository = "https://github.com/colmap4d/colmap4d"
+Specification = "https://github.com/colmap4d/colmap4d/blob/main/spec/colmap4d-v1.0.md"
+Changelog = "https://github.com/colmap4d/colmap4d/blob/main/spec/CHANGELOG.md"
 
 [tool.setuptools.packages.find]
 where = ["src"]
