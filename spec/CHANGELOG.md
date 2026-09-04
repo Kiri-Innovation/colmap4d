@@ -8,6 +8,14 @@ README "Versioning" section). Each entry is tagged by category:
 
 ## Unreleased — toward v1.0
 
+- **[normative change]** **`points_t_method` optional field (I.C).** A new OPTIONAL (MAY)
+  top-level `time_meta` field declaring how `points_t` was derived — `track_centroid` /
+  `track_median` / `first_observation` — when one method describes the whole file. A declaration,
+  not a gate: conformance does not check it; omit for mixed/unknown. This is a **backward-compatible
+  extension that relies on the existing normative rule "readers MUST tolerate unknown fields"**, so
+  an old reader ignores it and a new file without it is still valid. *It is the precedent template
+  for post-freeze additions: any future optional field is added exactly this way (MAY, ignorable,
+  CHANGELOG entry), never a required field or a changed one.* Schema + `minimal_scene` goldens updated.
 - **[normative change]** **I.E Binary sidecar layout.** The little-endian, count-prefixed byte
   layout of `times.bin` / `points_t.bin` is now specified normatively in Part I (was only in the
   reference docstring); the conformance surface is self-contained. Added `minimal_scene_bin/` and
