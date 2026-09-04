@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://colmap4d.org/schemas/time_meta.schema.json",
+  "title": "colmap4d time_meta.json",
+  "$comment": "INFORMATIVE, not normative. The prose of spec section I.C is authoritative; this schema is a convenience for tool authors and an optional advisory check. It is INFORMATIVE by logical necessity, not merely by posture: I.C makes it a normative rule that a reader MUST tolerate unknown top-level and unknown device fields (forward compatibility). A normative schema that strictly validated structure would reject those unknown fields and thereby contradict that MUST. Hence every object here sets additionalProperties:true, and no tool may treat a schema failure as a conformance failure.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["time_convention", "clock_domain"],
+  "properties": {
+    "colmap4d_spec": {
+      "type": "string",
+      "description": "Spec version the file targets, e.g. \"0.2-draft\"."
+    },
+    "time_convention": {
+      "type": "string",
+      "description": "How each image's t is defined. v1 defines only \"mid_exposure\"; reserved others may follow, so this is not enum-constrained."
+    },
+    "time_unit": {
+      "type": "string",
+      "description": "If present, must be \"ns\" (T_NS is always nanoseconds)."
+    },
+    "clock_domain": {
+      "type": "string",
+      "description": "Semantics of the integer, e.g. \"utc_ntp\", \"utc_gps\", \"monotonic_boot\"."
+    },
+    "devices": {
+      "type": "object",
+      "description": "device_id -> device object. Provenance only; not a conformance gate (I.C).",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "camera_ids": {
+            "type": "array",
+            "items": { "type": "integer" },
+            "description": "COLMAP CAMERA_IDs produced by this device (device -> many, one-to-many hint)."
+          },
+          "raw_clock": { "type": "string" },
+          "sync_method": { "type": "string" },
+          "sync_err_ns": { "type": "integer" },
+          "offset_samples": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "prefixItems": [{ "type": "integer" }, { "type": "integer" }],
+              "items": { "type": "integer" },
+              "minItems": 2
+            },
+            "description": "Raw [t_mono_ns, offset_ns] clock-offset observations."
+          }
+        }
+      }
+    }
+  }
+}
