@@ -1,0 +1,10 @@
+# Image list with two lines of data per image:
+#   IMAGE_ID, QW, QX, QY, QZ, TX, TY, TZ, CAMERA_ID, NAME
+#   POINTS2D[] as (X, Y, POINT3D_ID)
+# Number of images: 3, mean observations per image: 4
+1 1.0 0.0 0.0 0.0 0.0 0.0 0.0 1 device_a/000001.jpg
+100.0 120.0 1 220.0 130.0 2 310.0 140.0 3 400.0 260.0 6
+2 0.9998 0.0 0.02 0.0 -0.15 0.01 0.02 1 device_a/000002.jpg
+102.0 121.0 1 221.0 131.0 2 330.0 250.0 4 402.0 262.0 6
+3 0.9995 0.01 0.03 0.0 0.30 -0.02 0.05 2 device_b/000001.jpg
+150.0 125.0 1 315.0 145.0 3 335.0 255.0 4 480.0 300.0 5 405.0 265.0 6

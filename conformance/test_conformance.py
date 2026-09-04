@@ -13,6 +13,7 @@ from colmap4d import sidecar, validate
 
 GOLDEN = Path(__file__).parent / "golden"
 MIN_SCENE = GOLDEN / "minimal_scene" / "sparse"
+MIN_SCENE_BIN = GOLDEN / "minimal_scene_bin" / "sparse"
 PLAIN = GOLDEN / "plain_colmap" / "sparse"
 NO_DEVICES = GOLDEN / "no_devices" / "sparse"
 DUP_IDS = GOLDEN / "dup_ids" / "sparse"
@@ -36,6 +37,37 @@ POINT_TEMPORALLY_UNBOUNDED = 5  # intentionally absent from points_t
 # --------------------------------------------------------------------------- #
 # times / points_t text golden
 # --------------------------------------------------------------------------- #
+# --------------------------------------------------------------------------- #
+# binary sidecar layout (spec I.E) — golden bytes authored to the spec, not dumped
+# --------------------------------------------------------------------------- #
+def test_bin_layout_field_equal_to_txt():
+    # minimal_scene_bin's .bin decode field-for-field to the same values as the text golden.
+    assert sidecar.read_times_bin(MIN_SCENE_BIN / "times.bin") == EXPECTED_TIMES
+    assert sidecar.read_points_t_bin(MIN_SCENE_BIN / "points_t.bin") == EXPECTED_POINTS_T
+
+
+def test_bin_layout_byte_size_matches_spec():
+    # spec I.E: file size MUST be 8 + count * record_size (12 for times, 16 for points_t).
+    assert (MIN_SCENE_BIN / "times.bin").stat().st_size == 8 + len(EXPECTED_TIMES) * 12
+    assert (MIN_SCENE_BIN / "points_t.bin").stat().st_size == 8 + len(EXPECTED_POINTS_T) * 16
+
+
+def test_bin_golden_loads_with_timeless_point():
+    sc = sidecar.load_sidecars(MIN_SCENE_BIN)  # prefers .bin
+    assert sc.times == EXPECTED_TIMES
+    assert sc.points_t == EXPECTED_POINTS_T
+    assert sc.point_time(5) is sidecar.TIMELESS  # point 5 absent → temporally-unbounded
+
+
+def test_bin_duplicate_id_last_wins():
+    # dup_ids/times.bin lists image 2 twice; a reader collapses last-wins (spec I.D/I.E),
+    # identical to the text form.
+    assert sidecar.read_times_bin(DUP_IDS / "times.bin") == sidecar.read_times_txt(
+        DUP_IDS / "times.txt"
+    )
+    assert sidecar.read_times_bin(DUP_IDS / "times.bin")[2] == 1699999999155555555
+
+
 def test_times_txt_matches_golden():
     assert sidecar.read_times_txt(MIN_SCENE / "times.txt") == EXPECTED_TIMES
 
