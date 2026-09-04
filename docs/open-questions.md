@@ -1,13 +1,14 @@
 # Open questions (WP0)
 
 Tracked ambiguities. Each was surfaced by hand-authoring the conformance golden and
-forcing a decision rather than letting the implementation decide silently. Provisional
-choices must be revisited before the spec leaves `v0.2-draft`.
+forcing a decision rather than letting the implementation decide silently. **OPEN-1..6 are all
+settled** — the normative outcomes live in the spec (Part I/II); this file is a provenance
+record. Nothing below is provisional.
 
 | id | question | current decision | status |
 |----|----------|------------------|--------|
 | OPEN-1 | How do `time_meta.devices` (string-keyed) bind to the COLMAP model? | Device attribution stays OUT of the core protocol; `camera_ids` kept as optional device→[CAMERA_ID] hint (MAY, not conformance-checked), `validate` enforces one-device-per-camera; viewer may infer by filename when absent. | **settled** |
-| OPEN-2 | What is `t0` for the rebase contract? | `min` over `times` ∪ `points_t`; not stored | settled, minor |
+| OPEN-2 | What is `t0` for the rebase contract? | `min` over the model's **effective** records (`times` ∪ `points_t` after joining + dropping dangling ids, spec I.B); `ModelView.t0_ns()` computes it, `Sidecars.t0_ns()` is the model-less approximation; not stored | **settled** |
 | OPEN-3 | Duplicate / dangling ids in a sidecar? | Tolerance is normative (spec I.D): writer MUST NOT duplicate, reader last-wins (opt-in strict); dangling permitted, consumer MUST ignore model-absent ids. `validate` grades duplicate=ERROR (non-zero exit), dangling=WARNING (exit 0, `--strict` promotes); dangling message names the SfM whole-model misalignment risk. | **settled** |
 | OPEN-4 | `IMAGE_ID`/`POINT3D_ID` unstable across SfM re-runs | sidecars share model-dir lifecycle, re-emitted by importer; no format change | settled |
 | OPEN-5 | empty vs absent `points_t` | equivalent (all points temporally-unbounded) | settled |

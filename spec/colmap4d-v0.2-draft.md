@@ -376,11 +376,11 @@ Discussions are themselves the evidence chain for that proposal.
 
 ---
 
-# Open questions surfaced while authoring the golden
+# Decisions record (formerly "open questions")
 
-These were found by hand-writing `conformance/golden/minimal_scene/` and forcing every
-ambiguity to a decision. Provisional choices are marked; revisit before leaving draft. See
-also `docs/open-questions.md`.
+These ambiguities were surfaced by hand-authoring the conformance goldens and forcing each to
+a decision. **All are settled**; the normative outcomes live in Part I/II above and this list is
+kept only as a provenance record (see also `docs/open-questions.md`). Nothing here is provisional.
 
 - **OPEN-1 (device↔model binding).** *Settled: device attribution stays out of the core
   protocol.* "Device" is a `time_meta` provenance concept with no host-format entity, so it
@@ -388,9 +388,10 @@ also `docs/open-questions.md`.
   (one-to-many) hint (MAY, not conformance-checked); `validate` enforces that a `CAMERA_ID`
   appears under at most one device. When absent, a viewer MAY infer grouping by filename
   prefix, labeled "inferred". See the `time_meta` section above.
-- **OPEN-2 (`t0` domain).** `t0` is defined as the min over `times` ∪ `points_t`. A track
-  centroid normally lies within its images' time span, so this usually equals min(`times`),
-  but the union is used to stay well-defined when only one sidecar is present.
+- **OPEN-2 (`t0` domain).** *Settled (see I.B): `t0` is the min over the model's **effective**
+  records — `times` ∪ `points_t` after joining to the base model and dropping dangling ids — so a
+  dangling early timestamp cannot shift it and two implementations agree.* `ModelView.t0_ns()`
+  computes it; `Sidecars.t0_ns()` is the model-less approximation over raw records. Not stored.
 - **OPEN-3 (duplicate / dangling ids).** *Settled (see I.D): tolerance is normative, not
   implementation-defined.* Writers MUST NOT duplicate ids; readers accept last-wins (optional
   strict mode). Dangling ids are permitted; consumers MUST ignore model-absent ids. `validate`
@@ -403,3 +404,7 @@ also `docs/open-questions.md`.
 - **OPEN-5 (empty vs absent).** An empty `points_t` (present, zero records) and an absent
   `points_t` are defined as equivalent (all points temporally-unbounded). Confirmed, not a
   problem — recorded so no future reader distinguishes them.
+- **OPEN-6 (per-frame conversion — dedup vs independent).** *Settled (author, white paper
+  Q3/§3.3): per-frame imports keep independent xyzt samples; NO cross-frame dedup.* Static
+  structure is honestly sampled once per instant; cross-frame dedup is a derived view / downstream
+  optimization, out of scope for v1. The `per_frame_colmap` converter refuses `dedup_points=True`.
