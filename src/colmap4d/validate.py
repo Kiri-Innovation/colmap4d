@@ -93,6 +93,24 @@ def check_dangling_ids(keys: list[int], valid_ids: set[int], kind: str) -> list[
     ]
 
 
+def check_time_meta_present(times: dict[int, int], time_meta: dict | None) -> list[Problem]:
+    """WARNING if a ``times`` sidecar exists but ``time_meta`` is absent (spec I.C). Without it
+    the timestamps have no declared clock domain / exposure convention and are only a relative
+    axis; a producer SHOULD declare provenance."""
+    if times and time_meta is None:
+        return [
+            Problem(
+                WARNING,
+                "time_meta.absent",
+                "times sidecar present but time_meta.json is absent; timestamps have undeclared "
+                "semantics (relative time only — MUST NOT be compared across models or to "
+                "wall-clock). A producer SHOULD write time_meta declaring clock_domain and "
+                "time_convention.",
+            )
+        ]
+    return []
+
+
 def check_device_camera_ids_unique(time_meta: dict | None) -> list[Problem]:
     """ERROR if a CAMERA_ID is attributed to more than one device (spec Part I: one
     image cannot be timestamped by two clocks). Absent time_meta/devices/camera_ids is OK.
@@ -161,5 +179,6 @@ def validate(
             problems += check_dangling_ids([k for k, _ in pairs], valid, kind)
 
     sc = sidecar.load_sidecars(d)
+    problems += check_time_meta_present(sc.times, sc.time_meta)
     problems += check_device_camera_ids_unique(sc.time_meta)
     return problems

@@ -18,6 +18,7 @@ PLAIN = GOLDEN / "plain_colmap" / "sparse"
 NO_DEVICES = GOLDEN / "no_devices" / "sparse"
 DUP_IDS = GOLDEN / "dup_ids" / "sparse"
 DANGLING = GOLDEN / "dangling_ids" / "sparse"
+TIMES_ONLY = GOLDEN / "times_only" / "sparse"
 
 EXPECTED_TIMES = {
     1: 1699999999123456789,
@@ -66,6 +67,36 @@ def test_bin_duplicate_id_last_wins():
         DUP_IDS / "times.txt"
     )
     assert sidecar.read_times_bin(DUP_IDS / "times.bin")[2] == 1699999999155555555
+
+
+# --------------------------------------------------------------------------- #
+# time_meta absent — undeclared relative time (spec I.C)
+# --------------------------------------------------------------------------- #
+def test_times_only_is_conformant():
+    sc = sidecar.load_sidecars(TIMES_ONLY)
+    assert sc.times == {1: 1699999999100000000, 2: 1699999999133333333}
+    assert sc.time_meta is None  # no time_meta.json
+    assert sc.points_t == {}  # all points temporally-unbounded
+
+
+def test_validate_warns_times_without_meta():
+    problems = validate.validate(TIMES_ONLY)
+    absent = [p for p in problems if p.code == "time_meta.absent"]
+    assert len(absent) == 1
+    assert absent[0].severity == validate.WARNING
+    assert validate.exit_code(problems) == 0
+    assert validate.exit_code(problems, strict=True) == 1
+
+
+def test_validate_no_meta_warning_when_meta_present():
+    problems = validate.validate(MIN_SCENE)
+    assert not any(p.code == "time_meta.absent" for p in problems)
+
+
+def test_check_time_meta_present_direct():
+    assert validate.check_time_meta_present({1: 5}, None)  # warns
+    assert validate.check_time_meta_present({}, None) == []  # no times → no warning
+    assert validate.check_time_meta_present({1: 5}, {"clock_domain": "utc_ntp"}) == []
 
 
 def test_times_txt_matches_golden():

@@ -94,3 +94,10 @@ A conformant `.bin` reader MUST decode them field-for-field to the SAME values d
 `minimal_scene/` above (point 5 absent from `points_t` ⇒ temporally-unbounded). `dup_ids/times.bin`
 carries the same duplicate as `dup_ids/times.txt` (image 2 twice) and MUST collapse **last-wins**
 (→ `1699999999155555555`), exactly like the text form.
+
+## `times_only/` — times without time_meta (spec I.C)
+
+A model with `times.txt` but **no** `time_meta.json` (and no `points_t`). Loading MUST succeed;
+the timestamps are a valid relative axis but carry no declared clock domain / exposure
+convention (MUST NOT be compared across models or to wall-clock). `validate` reports a
+**WARNING** `time_meta.absent` (exit 0; `--strict` promotes).
