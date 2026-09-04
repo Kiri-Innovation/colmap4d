@@ -155,6 +155,13 @@ Each **device object** (all fields OPTIONAL, provenance for one capture device):
 A reader MUST tolerate unknown top-level and unknown device fields (forward compatibility):
 ignore, do not error.
 
+An **informative** JSON Schema for this object is provided at
+[`spec/schemas/time_meta.schema.json`](schemas/time_meta.schema.json) as a convenience for tool
+authors. It is not normative — this prose is authoritative — and by construction cannot be: the
+"MUST tolerate unknown fields" rule above means the schema sets `additionalProperties: true`
+everywhere, so a schema pass/fail can never be a conformance verdict. `colmap4d validate` does
+**not** run it (no schema-library dependency); it is documentation and an optional external aid.
+
 ### `time_meta` absent — undeclared relative time
 
 When a `times` sidecar exists, `time_meta.json` SHOULD accompany it. When it does **not**, the
