@@ -199,7 +199,7 @@ def convert_per_frame_colmap(
     # Synthetic timestamps are uniform frame_index * interval — the degenerate case of a
     # software-clocked capture where the real per-image offsets were not recorded.
     time_meta = {
-        "colmap4d_spec": "0.2-draft",
+        "colmap4d_spec": "1.0",
         "time_convention": "mid_exposure",
         "time_unit": "ns",
         "clock_domain": "synthetic_uniform" if synthetic else "provided",

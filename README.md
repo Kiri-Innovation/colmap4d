@@ -9,8 +9,12 @@ colmap4d adds up to three **sidecar** files to an ordinary COLMAP model and chan
 existing file — so old tools open it as a perfectly normal (static) reconstruction, while a
 4D-aware viewer unlocks a free 3D view + a draggable time axis.
 
-> Status: **v0.2-draft** — spec not yet frozen. See [`spec/colmap4d-v0.2-draft.md`](spec/colmap4d-v0.2-draft.md).
-> Only the three Part I rules marked FROZEN are settled enough to build against.
+> Spec **v1.0 — frozen.** See [`spec/colmap4d-v1.0.md`](spec/colmap4d-v1.0.md); Part I and the
+> conformance goldens are normative, and changes follow [`spec/CHANGELOG.md`](spec/CHANGELOG.md).
+>
+> colmap4d is an **independent, community extension** of the COLMAP output format. It is **not
+> affiliated with or endorsed by** the COLMAP project; "COLMAP" is used only to name the format
+> it extends.
 
 ## 30-second quickstart
 
@@ -82,13 +86,12 @@ Two **independent** version axes:
 
 | axis | where | meaning |
 |------|-------|---------|
-| **Package version** | `pyproject.toml` (`0.2.0.dev0`) | the Python implementation — bumps for any code change (bug fixes, new converters, API tweaks). |
-| **Spec version** | `spec/` title + `time_meta.colmap4d_spec` (`0.2-draft`) | the on-disk **protocol** — bumps only on a protocol change, and only reaches `1.0` when frozen. |
+| **Package version** | `pyproject.toml` (`1.0.0`) | the Python implementation — bumps for any code change (bug fixes, new converters, API tweaks). |
+| **Spec version** | `spec/` title + `time_meta.colmap4d_spec` (`1.0`) | the on-disk **protocol** — bumps only on a protocol change. |
 
-They move at different rates: the package can release many times against one frozen spec. This
-package implements spec **v0.2-draft**. Protocol changes are logged in
-[`spec/CHANGELOG.md`](spec/CHANGELOG.md); the road to freezing is
-[`docs/freeze-checklist.md`](docs/freeze-checklist.md).
+They move at different rates: the package can release many times against one frozen spec.
+**This package (1.0.0) implements spec v1.0.** Protocol changes are logged in
+[`spec/CHANGELOG.md`](spec/CHANGELOG.md).
 
 ## Development
 

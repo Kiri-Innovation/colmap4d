@@ -6,7 +6,30 @@ README "Versioning" section). Each entry is tagged by category:
 - **clarification** — wording/structure only; no conformant behavior changes.
 - **normative change** — changes an obligation or behavior (a conformant reader/writer may need updating).
 
-## Unreleased — toward v1.0
+## 1.0 — spec frozen
+
+Part I (I.A–I.E) and the conformance goldens in `conformance/golden/` are now **normative and
+frozen**. From here, changes follow the `points_t_method` precedent: **new optional fields/layers
+only** (readers already MUST tolerate unknown fields) — never a change to, or removal of, an
+existing rule. The frozen surface, distilled:
+
+- **I.A** — `points_t` is a partial map; a missing point is temporally-unbounded (present at all
+  `t`); an absent/empty `points_t` ⇒ all points unbounded (the backward-compatibility baseline).
+- **I.B** — timestamps are signed int64 nanoseconds (no `float64` on disk); `t0` is derived (not
+  stored) as the min over the model-joined, dangling-dropped record set.
+- **I.C** — `time_meta.json` top-level fields (`time_convention` MUST be `mid_exposure`,
+  `clock_domain` MUST, plus `colmap4d_spec` / `time_unit` / `points_t_method` / `devices`); readers
+  MUST tolerate unknown fields; `times` without `time_meta` is undeclared relative time.
+- **I.D** — duplicate ids resolve **last-wins** (writer MUST NOT emit them); dangling ids are
+  permitted and consumers MUST ignore model-absent ids.
+- **I.E** — binary sidecar layout: little-endian, uint64 count prefix, `times` record
+  (uint32 id, int64 ns) / `points_t` record (uint64 id, int64 ns).
+- **Decisions (OPEN-1..7):** device attribution is provenance-only (OPEN-1); t0 effective-set
+  (OPEN-2); reader tolerance is normative (OPEN-3); sidecars share the model lifecycle (OPEN-4);
+  empty ≡ absent `points_t` (OPEN-5); per-frame imports keep independent samples, no cross-frame
+  dedup (OPEN-6); a redundant `NAME` column in `times` is rejected (OPEN-7).
+
+The individual normative changes that composed this freeze (each landed as its own PR):
 
 - **[normative change]** **`points_t_method` optional field (I.C).** A new OPTIONAL (MAY)
   top-level `time_meta` field declaring how `points_t` was derived — `track_centroid` /

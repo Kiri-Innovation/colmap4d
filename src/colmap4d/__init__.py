@@ -31,7 +31,7 @@ from colmap4d.sidecar import (
     write_times_txt,
 )
 
-__version__ = "0.2.0.dev0"
+__version__ = "1.0.0"
 
 __all__ = [
     "TIMELESS",
