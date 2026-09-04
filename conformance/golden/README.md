@@ -9,6 +9,19 @@ Only the **normative** facts below are guaranteed. Incidental choices (line orde
 whitespace, the specific centroid values in `points_t.txt`) are NOT normative and a
 conformant reader must not depend on them.
 
+## Status: normative fixtures
+
+These goldens are the **executable definition of the format** — the normative facts documented
+per fixture below are frozen alongside the spec. Conformance is defined against Part I of the
+spec **plus** these fixtures; where a subtle question is under-specified in prose, the golden
+bytes/values decide.
+
+**Change constraint.** Editing a golden's normative content (the byte layout, the documented
+ids/timestamps, the pass/fail behavior it pins) **is a protocol change** and MUST go through the
+same spec-PR process as editing Part I — with a `spec/CHANGELOG.md` entry and category. Purely
+incidental edits (a comment, a non-normative field, adding a *new* fixture) are ordinary changes.
+Never regenerate a golden from an implementation to make a test pass; fix the implementation.
+
 ## `minimal_scene/` — a colmap4d model
 
 Standard COLMAP text model (`cameras.txt`, `images.txt`, `points3D.txt`) plus the three

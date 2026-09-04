@@ -28,7 +28,10 @@ The specification is layered so that RFC-2119 obligations apply to as little as 
 - **Part I — Protocol rules (Normative).** MUST / SHOULD / MAY per
   [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119). This is the only part with binding
   force. A conformant reader/writer is defined solely against Part I + the conformance
-  goldens in `conformance/golden/`.
+  goldens in `conformance/golden/`. **The goldens are normative fixtures** (their documented
+  bytes/values/behavior are the executable definition of Part I); editing a golden's normative
+  content is a protocol change and follows the same PR process as editing Part I — see
+  `conformance/golden/README.md`.
 - **Part II — Best practices (Informative).** RECOMMENDED conventions. Ignoring them
   produces a still-valid model.
 - **Part III — Derived views (Informative, Optional).** Things any tool can recompute from
