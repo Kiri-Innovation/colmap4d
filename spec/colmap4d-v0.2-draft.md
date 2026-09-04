@@ -360,13 +360,20 @@ adoption. The reference repo (`colmap4d/colmap4d`) is organized around three rol
   3.12 rigs/frames. `import colmap4d; colmap4d.load_model_view(dir)` reads a timestamped model
   with no compiled dependency.
 - **Converters (the "writer" side — where the format's data comes from).** `colmap4d.convert`:
-  `per_frame_colmap` (N per-frame COLMAP dirs → one colmap4d model) is implemented; nerfstudio
-  `transforms.json`, Neu3D/DyNeRF, HyperNeRF/Nerfies are planned. Plus `colmap4d validate`
-  (graded ERROR/WARNING with exit codes).
-- **Viewer (the "why you'd want this" — a separate repo).** 3D free view + time scrubber,
-  ε-window camera gating, GPU time-kernel point filtering, exposure Gantt chart. Kept separate
-  for stack/build/cadence reasons; today the `ColmapUtil` React viewer (adjacent repo) is the
-  starting point and will be linked once published under the org.
+  `per_frame_colmap` (N per-frame COLMAP dirs → one colmap4d model) is implemented; planned:
+  single COLMAP + named image sequence, nerfstudio `transforms.json` (bidirectional, `time`
+  field), Neu3D/DyNeRF, HyperNeRF/Nerfies, EuRoC/TUM. Plus `colmap4d validate` (graded
+  ERROR/WARNING with exit codes): implemented checks are duplicate ids, dangling ids,
+  device/camera-id uniqueness, and clock-domain declaration (`time_meta.absent`); planned checks
+  are coverage completeness and per-camera time monotonicity.
+- **Viewer (the "why you'd want this" — a separate repo).** 3D free view + time scrubber;
+  cameras appearing/disappearing by ε-window with out-of-window cameras dimmed; GPU time-kernel
+  point filtering (per-point `t` as a vertex attribute, one-line shader discard); an exposure
+  Gantt chart (one row per camera, one tick per exposure — sync quality, dropped frames, and
+  drift visible at a glance, doubling as a capture-rig debug tool); dynamic/static colouring by a
+  track-time-span threshold (doubling as reconstruction QC); and a live ε slider showing the
+  grouping effect. Kept separate for stack/build/cadence reasons; today the `ColmapUtil` React
+  viewer (adjacent repo) is the starting point and will be linked once published under the org.
 
 Datasets (a real non-synchronized capture with raw timestamps + offset samples, and a 4DGS
 loader patch) ship as `examples/` + release assets until there are enough to warrant their own
@@ -376,6 +383,21 @@ loader patch) ship as `examples/` + release assets until there are enough to war
 with this design + reference implementation). If accepted, colmap4d becomes the transition-period
 reference; if not, it holds the community-consensus direction. The public draft spec + repo
 Discussions are themselves the evidence chain for that proposal.
+
+## IV.1 — Roadmap: v2 candidate layers (non-normative)
+
+v1 (this document) is deliberately minimal: `times`, `points_t`, `time_meta`. The following are
+candidate **optional** layers for a future v2 — recorded here so the direction is on record; none
+is part of v1 and none constrains a conformant v1 implementation (white paper §6):
+
+- a **4D-reconstruction exchange layer** (per-point trajectories / time-varying attributes),
+  standing to native 4DGS as this sparse layer stands to it now;
+- a **dynamic/static mask + semantic annotation** sidecar (segmentation is a downstream job, so
+  it is a separate optional layer, never folded into the core `t`);
+- **multi-modal time alignment** (IMU / GNSS / audio) beyond per-image timestamps;
+- **continuous-time camera pose** (spline trajectories) rather than one pose per discrete image.
+
+Each would follow the same "only add, strictly backward compatible" sidecar discipline as v1.
 
 ---
 
