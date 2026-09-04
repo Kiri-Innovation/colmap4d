@@ -203,10 +203,12 @@ class Sidecars:
         return self.points_t.get(point3d_id, TIMELESS)
 
     def t0_ns(self) -> int | None:
-        """Rebase origin = min timestamp across the model (see spec Part I.B).
+        """Rebase origin = min timestamp over the **raw** sidecar records — an APPROXIMATION.
 
-        Returned so callers can compute ``(t - t0)`` float32 relative seconds for
-        rendering. ``None`` when the model carries no timestamps at all.
+        The authoritative t0 (spec I.B) is the min over the model-joined, dangling-dropped
+        records; this method has no base model, so a dangling id with an early timestamp would
+        pull it earlier. Use ``colmap4d.model.ModelView.t0_ns()`` when the base model is
+        available. ``None`` when there are no timestamps at all.
         """
         vals = list(self.times.values()) + list(self.points_t.values())
         return min(vals) if vals else None

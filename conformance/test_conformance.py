@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from colmap4d import sidecar, validate
+from colmap4d import model, sidecar, validate
 
 GOLDEN = Path(__file__).parent / "golden"
 MIN_SCENE = GOLDEN / "minimal_scene" / "sparse"
@@ -19,6 +19,7 @@ NO_DEVICES = GOLDEN / "no_devices" / "sparse"
 DUP_IDS = GOLDEN / "dup_ids" / "sparse"
 DANGLING = GOLDEN / "dangling_ids" / "sparse"
 TIMES_ONLY = GOLDEN / "times_only" / "sparse"
+DANGLING_EARLY = GOLDEN / "dangling_early" / "sparse"
 
 EXPECTED_TIMES = {
     1: 1699999999123456789,
@@ -97,6 +98,19 @@ def test_check_time_meta_present_direct():
     assert validate.check_time_meta_present({1: 5}, None)  # warns
     assert validate.check_time_meta_present({}, None) == []  # no times → no warning
     assert validate.check_time_meta_present({1: 5}, {"clock_domain": "utc_ntp"}) == []
+
+
+# --------------------------------------------------------------------------- #
+# t0 domain (spec I.B): effective (dangling-dropped) min, not raw min
+# --------------------------------------------------------------------------- #
+def test_t0_effective_ignores_dangling_early_time():
+    # points_t has a dangling id 999 at an EARLY time; the model-joined t0 must ignore it.
+    mv = model.load_model_view(DANGLING_EARLY)  # zero-dep reader (no pycolmap)
+    assert mv.t0_ns() == 1699999999200000000  # min over in-model records only
+    # the model-less approximation DOES get pulled earlier by the dangling id:
+    sc = sidecar.load_sidecars(DANGLING_EARLY)
+    assert sc.t0_ns() == 1699999999000000000
+    assert mv.t0_ns() != sc.t0_ns()  # the whole point of pinning t0 to the effective set
 
 
 def test_times_txt_matches_golden():
