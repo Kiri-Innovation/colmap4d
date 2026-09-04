@@ -132,6 +132,7 @@ axis. Top-level fields:
 | `time_convention` | MUST | string | how each image's `t` is defined. MUST be `"mid_exposure"` in v1 (the only defined value); reserved others may follow. |
 | `time_unit` | SHOULD | string | MUST be `"ns"` if present (informational; `T_NS` is always ns). |
 | `clock_domain` | MUST | string | semantics of the integer, e.g. `"utc_ntp"`, `"utc_gps"`, `"monotonic_boot"`. |
+| `points_t_method` | MAY | string | how `points_t` timestamps were derived, when a **single** method describes the whole file: `"track_centroid"` (II.1 default), `"track_median"`, or `"first_observation"`. A *declaration, not a gate*: omit it for a mixed or unknown derivation. Conformance does not check it; `validate` MAY at most advisorily re-verify (given `times` + tracks) without affecting exit code. |
 | `devices` | MAY | object | map of `device_id → device object` (below). |
 
 **`devices` is provenance, not a conformance gate.** A capture "device" is a concept

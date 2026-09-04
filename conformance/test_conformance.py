@@ -73,6 +73,15 @@ def test_bin_duplicate_id_last_wins():
 # --------------------------------------------------------------------------- #
 # time_meta absent — undeclared relative time (spec I.C)
 # --------------------------------------------------------------------------- #
+def test_points_t_method_optional_declaration():
+    # minimal_scene declares its points_t derivation (track_centroid); it is a declaration,
+    # not a gate — conformance does not require or check it beyond being one of the enum values.
+    meta = sidecar.read_time_meta(MIN_SCENE / "time_meta.json")
+    assert meta["points_t_method"] == "track_centroid"
+    # optional: models may omit it and stay conformant (no_devices has no points_t_method).
+    assert "points_t_method" not in sidecar.read_time_meta(NO_DEVICES / "time_meta.json")
+
+
 def test_times_only_is_conformant():
     sc = sidecar.load_sidecars(TIMES_ONLY)
     assert sc.times == {1: 1699999999100000000, 2: 1699999999133333333}

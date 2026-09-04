@@ -23,6 +23,11 @@
       "type": "string",
       "description": "Semantics of the integer, e.g. \"utc_ntp\", \"utc_gps\", \"monotonic_boot\"."
     },
+    "points_t_method": {
+      "type": "string",
+      "enum": ["track_centroid", "track_median", "first_observation"],
+      "description": "Optional declaration (not a gate) of how points_t timestamps were derived, when one method describes the whole file. Omit for mixed/unknown. See spec I.C."
+    },
     "devices": {
       "type": "object",
       "description": "device_id -> device object. Provenance only; not a conformance gate (I.C).",
