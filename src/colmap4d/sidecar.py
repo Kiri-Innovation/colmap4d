@@ -14,13 +14,10 @@ Timestamps are int64 nanoseconds (see spec Part I.B). ``points_t`` is a PARTIAL 
 a point absent from it is *temporally-unbounded* and is represented here by simple
 absence from the returned dict (see :func:`is_temporally_unbounded`).
 
-Binary layout (little-endian, mirroring COLMAP's own count-prefixed .bin files):
-
-    times.bin     : uint64 count, then count * (uint32 image_id,   int64 t_ns)
-    points_t.bin  : uint64 count, then count * (uint64 point3d_id, int64 t_ns)
-
-image ids are uint32 and point ids are uint64 to match COLMAP's ``image_t`` and
-``point3D_t`` integer widths.
+Binary layout is defined normatively by the spec, section **I.E "Binary sidecar layout"**
+(little-endian, uint64 count prefix; times record = uint32 image_id + int64 t_ns; points_t
+record = uint64 point3d_id + int64 t_ns; id widths match COLMAP's image_t/point3D_t). This
+module implements that section — the spec, not this docstring, is the source of truth.
 """
 
 from __future__ import annotations

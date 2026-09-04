@@ -172,6 +172,29 @@ present, a given `CAMERA_ID` MUST appear under at most one device — one image 
 timestamped by two clocks. `MAY` means the field is optional to write, not free to write
 inconsistently.
 
+## I.E — Binary sidecar layout — **FROZEN**
+
+`times.bin` and `points_t.bin` are the binary forms of `times` / `points_t` (a reader MUST
+prefer `.bin` when both forms are present). All integers are **little-endian**. Each file is a
+**uint64 record count** followed by exactly that many fixed-width records:
+
+```
+times.bin     : uint64 count, then count × ( uint32 IMAGE_ID,   int64 T_NS )
+points_t.bin  : uint64 count, then count × ( uint64 POINT3D_ID, int64 T_NS )
+```
+
+- `T_NS` is the same signed int64 nanoseconds as the text form (I.B).
+- Id widths match COLMAP's own integer types so the sidecars align with the base model:
+  image ids are **uint32** (COLMAP `image_t`) and point ids are **uint64** (COLMAP `point3D_t`).
+- There is no per-record delimiter, no header beyond the count, and no trailing padding: one
+  `times` record is exactly 12 bytes, one `points_t` record exactly 16 bytes. File size MUST be
+  `8 + count × record_size`.
+- Duplicate and dangling ids follow I.D identically to the text form (a reader collapses
+  duplicates **last-wins**). `time_meta` has no binary form — it is always JSON.
+
+This section is self-contained: a conformant `.bin` reader can be written from this text plus
+the `conformance/golden/minimal_scene_bin/` fixture, with no reference to any implementation.
+
 ### Explicitly NOT in Part I (by decision)
 
 - **Filename-as-timestamp conventions** are NOT a protocol rule. COLMAP imposes no filename

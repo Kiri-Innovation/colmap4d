@@ -78,3 +78,19 @@ instead raise. This pins every implementation to the same deterministic toleranc
 - A model-aware consumer MUST ignore model-absent ids ⇒ effective `{1, 2}`.
 - `validate` reports 999 as a **WARNING** (exit 0; `--strict` promotes to failure), and the
   message names the SfM whole-model misalignment risk, not merely "unknown id".
+
+## `minimal_scene_bin/` — binary sidecar layout (spec I.E)
+
+Same base model + values as `minimal_scene/`, but the sidecars are `times.bin` / `points_t.bin`
+authored to spec I.E (little-endian, uint64 count prefix; hand-authored bytes, not dumped by the
+implementation). Byte layout:
+
+```
+times.bin    : <Q count=3>  then 3 × <I image_id><q t_ns>   → file size 8 + 3*12 = 44 bytes
+points_t.bin : <Q count=5>  then 5 × <Q point3d_id><q t_ns> → file size 8 + 5*16 = 88 bytes
+```
+
+A conformant `.bin` reader MUST decode them field-for-field to the SAME values documented for
+`minimal_scene/` above (point 5 absent from `points_t` ⇒ temporally-unbounded). `dup_ids/times.bin`
+carries the same duplicate as `dup_ids/times.txt` (image 2 twice) and MUST collapse **last-wins**
+(→ `1699999999155555555`), exactly like the text form.
