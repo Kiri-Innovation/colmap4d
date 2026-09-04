@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "colmap4d"
-version = "1.0.0"
+version = "1.0.1"
 description = "Standard COLMAP sparse model + per-image and per-point timestamps (x, y, z, t)."
 readme = "README.md"
 requires-python = ">=3.9"

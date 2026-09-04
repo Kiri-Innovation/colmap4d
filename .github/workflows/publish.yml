@@ -1,0 +1,30 @@
+name: publish
+
+# Publish to PyPI on a GitHub Release, using PyPI Trusted Publishing (OIDC) — no API token
+# or password stored anywhere. Configure the "pending publisher" on PyPI first
+# (project: colmap4d, owner: Kiri-Innovation, repo: colmap4d, workflow: publish.yml), then
+# publishing a Release builds the tagged tree and uploads sdist + wheel automatically.
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write # OIDC token for Trusted Publishing (no PyPI secret needed)
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - name: Build sdist + wheel
+        run: |
+          python -m pip install --upgrade build
+          python -m build
+      - name: Publish to PyPI (Trusted Publishing)
+        uses: pypa/gh-action-pypi-publish@release/v1

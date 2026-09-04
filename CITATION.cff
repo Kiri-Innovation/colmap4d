@@ -7,7 +7,7 @@ abstract: >-
   (x, y, z, t), with strict backward compatibility.
 authors:
   - name: "colmap4d authors"
-version: 1.0.0
+version: 1.0.1
 license: Apache-2.0
 repository-code: "https://github.com/Kiri-Innovation/colmap4d"
 keywords:

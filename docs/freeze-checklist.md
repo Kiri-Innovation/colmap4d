@@ -24,6 +24,14 @@
 - [x] **Conformance suite green** (ruff + pytest) on the freeze commit.
 - [x] **Tag `v1.0.0`** on the merged freeze commit + GitHub Release.
 
+## Process lessons (add to the checklist before the *next* tag)
+- [ ] **Pre-tag URL/placeholder audit.** Before tagging a release, `grep -rn` the whole repo for
+      placeholder URLs and org names (e.g. `colmap4d/colmap4d`, `TODO`, `example.com`) and fix them
+      *first* — a tag is immutable and PyPI/Trusted-Publishing builds from the tagged tree, so any
+      dead link is permanently baked in. **v1.0.0 shipped this way**: the repo-URL fix (`272142d`)
+      landed *after* the tag (`362fc30`), so v1.0.0's tree still holds `colmap4d/colmap4d`. Handled
+      by releasing 1.0.1 (package axis) rather than moving the tag — the textbook dual-version case.
+
 ## Not gating (can follow v1.0, as new optional/informative work)
 - Converters beyond `per_frame_colmap` (nerfstudio bidirectional, Neu3D, HyperNeRF, EuRoC/TUM).
 - `groups.txt` read/write helpers + `.bin` mirror.
