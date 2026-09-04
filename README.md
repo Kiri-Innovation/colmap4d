@@ -76,6 +76,20 @@ faster release cadence). Today that is the `ColmapUtil` React viewer living alon
 repo (`../ColmapUtil`); it already opens standard COLMAP models and is being extended for
 the colmap4d time axis. It will be linked here once published under the org.
 
+## Versioning
+
+Two **independent** version axes:
+
+| axis | where | meaning |
+|------|-------|---------|
+| **Package version** | `pyproject.toml` (`0.2.0.dev0`) | the Python implementation — bumps for any code change (bug fixes, new converters, API tweaks). |
+| **Spec version** | `spec/` title + `time_meta.colmap4d_spec` (`0.2-draft`) | the on-disk **protocol** — bumps only on a protocol change, and only reaches `1.0` when frozen. |
+
+They move at different rates: the package can release many times against one frozen spec. This
+package implements spec **v0.2-draft**. Protocol changes are logged in
+[`spec/CHANGELOG.md`](spec/CHANGELOG.md); the road to freezing is
+[`docs/freeze-checklist.md`](docs/freeze-checklist.md).
+
 ## Development
 
 ```bash
