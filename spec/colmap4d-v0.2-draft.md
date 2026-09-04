@@ -66,26 +66,6 @@ General rules:
   fields are whitespace-separated.
 - Record ordering within a sidecar is NOT normative; a reader MUST NOT depend on it.
 
-### Duplicate and dangling ids (reader tolerance is normative) — **FROZEN (I.D)**
-
-Reader tolerance is specified, not left to implementations: if one reader took first-wins
-and another last-wins, the same file would yield two different timestamps — a silent data
-divergence, worse than a crash.
-
-- **Duplicate id.** A writer MUST NOT emit two records with the same id in one sidecar. A
-  reader SHOULD accept such a file and resolve duplicates **last-wins** (the last occurrence
-  in file order is authoritative). A reader MAY offer a strict mode that rejects duplicates
-  instead. `validate` reports a duplicate as an **ERROR** (a writer-side bug; the shadowed
-  timestamps are lost).
-- **Dangling id.** A sidecar MAY reference an id absent from the base model — this is *not*
-  forbidden (legitimate use: keeping a sidecar as a superset of a filtered/subset model). A
-  consuming reader (one that has the base model) MUST ignore ids not present in the model.
-  `validate` reports dangling ids as a **WARNING** by default, promotable to failure under
-  `--strict`. The warning MUST name the real hazard: after an SfM re-run, the danger is not
-  the id that vanished but a surviving id now pointing at a *different* entity (a silently
-  mislabeled timestamp) — a dangling id is often its only visible symptom, so the fix is to
-  regenerate the sidecar, not to trust the survivors.
-
 ## I.A — `points_t` is a partial map; missing points are temporally-unbounded — **FROZEN**
 
 `points_t` maps `POINT3D_ID → T_NS`. It is a **partial map**: a sparse point MAY have no
@@ -102,8 +82,8 @@ entry.
   from the model. Duplicate and dangling ids are governed by I.D below.
 
 `times` (per-image) is, by contrast, expected to cover images that carry a timestamp; an
-image absent from `times` simply has no known time (same null semantics), but per-image
-coverage is normally complete for a given capture.
+image absent from `times` simply has no known time (same null semantics). *(Informative: for a
+given capture, per-image coverage is normally complete — an observation, not a requirement.)*
 
 > **Informative rationale (author's stance).** In the *ideal* dense spacetime model, static
 > structure is not a special case: a persistent wall corner is honestly sampled as one point
@@ -192,6 +172,26 @@ SHOULD declare provenance); it is not an error, because timestamp-only models ar
 present, a given `CAMERA_ID` MUST appear under at most one device — one image cannot be
 timestamped by two clocks. `MAY` means the field is optional to write, not free to write
 inconsistently.
+
+## I.D — Duplicate and dangling ids (reader tolerance is normative) — **FROZEN**
+
+Reader tolerance is specified, not left to implementations: if one reader took first-wins
+and another last-wins, the same file would yield two different timestamps — a silent data
+divergence, worse than a crash.
+
+- **Duplicate id.** A writer MUST NOT emit two records with the same id in one sidecar. A
+  reader SHOULD accept such a file and resolve duplicates **last-wins** (the last occurrence
+  in file order is authoritative). A reader MAY offer a strict mode that rejects duplicates
+  instead. `validate` reports a duplicate as an **ERROR** (a writer-side bug; the shadowed
+  timestamps are lost).
+- **Dangling id.** A sidecar MAY reference an id absent from the base model — this is *not*
+  forbidden (legitimate use: keeping a sidecar as a superset of a filtered/subset model). A
+  consuming reader (one that has the base model) MUST ignore ids not present in the model.
+  `validate` reports dangling ids as a **WARNING** by default, promotable to failure under
+  `--strict`. The warning MUST name the real hazard: after an SfM re-run, the danger is not
+  the id that vanished but a surviving id now pointing at a *different* entity (a silently
+  mislabeled timestamp) — a dangling id is often its only visible symptom, so the fix is to
+  regenerate the sidecar, not to trust the survivors.
 
 ## I.E — Binary sidecar layout — **FROZEN**
 
