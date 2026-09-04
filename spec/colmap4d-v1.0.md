@@ -389,8 +389,9 @@ loader patch) ship as `examples/` + release assets until there are enough to war
 
 **Upstream strategy.** Propose per-image/frame timestamp fields to COLMAP (a repo Discussion,
 with this design + reference implementation). If accepted, colmap4d becomes the transition-period
-reference; if not, it holds the community-consensus direction. The public draft spec + repo
-Discussions are themselves the evidence chain for that proposal.
+reference; if not, it holds the community-consensus direction. The **frozen v1.0 spec**, the
+reference implementation + conformance goldens, and the repo Discussions are the evidence chain
+for that proposal.
 
 ## IV.1 — Roadmap: v2 candidate layers (non-normative)
 

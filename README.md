@@ -86,11 +86,11 @@ Two **independent** version axes:
 
 | axis | where | meaning |
 |------|-------|---------|
-| **Package version** | `pyproject.toml` (`1.0.0`) | the Python implementation — bumps for any code change (bug fixes, new converters, API tweaks). |
+| **Package version** | `pyproject.toml` (`1.0.1`) | the Python implementation — bumps for any code change (bug fixes, new converters, API tweaks). |
 | **Spec version** | `spec/` title + `time_meta.colmap4d_spec` (`1.0`) | the on-disk **protocol** — bumps only on a protocol change. |
 
 They move at different rates: the package can release many times against one frozen spec.
-**This package (1.0.0) implements spec v1.0.** Protocol changes are logged in
+**This package (1.0.1) implements spec v1.0.** Protocol changes are logged in
 [`spec/CHANGELOG.md`](spec/CHANGELOG.md).
 
 ## Development
