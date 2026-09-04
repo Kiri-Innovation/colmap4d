@@ -114,7 +114,11 @@ coverage is normally complete for a given capture.
 > must not be read as, a static/dynamic classification** — deciding what is background is the
 > job of downstream reconstruction, not of this format. See white paper §3.3, Q4, Q6.
 
-## I.B — Timestamps are int64 nanoseconds; rendering rebases to float32 relative seconds — **FROZEN**
+## I.B — Timestamps are int64 nanoseconds; `t0` is derived, not stored — **FROZEN**
+
+Part I governs only the **storage layer**. How a consumer rebases for rendering is a best
+practice (II.5), not a protocol obligation — Part I imposes no MUST on any consumer
+rendering/compute process.
 
 - All timestamps (`T_NS` in `times`/`points_t`) are **signed 64-bit integer nanoseconds**.
   `float64` seconds would lose sub-millisecond precision on epoch-scale values and is
@@ -123,11 +127,6 @@ coverage is normally complete for a given capture.
 - The semantic meaning of the integer (epoch, monotonic boot clock, …) is declared by
   `time_meta.clock_domain` (I.C); the format stores the **resolved global time**, not raw
   per-device clocks.
-- **Rendering / GPU contract.** Consumers that upload time to the GPU MUST NOT place raw
-  int64 ns into a float32 vertex attribute: ~1.7e18 ns overflows float32's 24-bit mantissa.
-  A consumer MUST first **rebase**: compute `t0 = min` timestamp over the model and upload
-  `(t − t0)` in **seconds as float32**. Over a single capture this spans seconds and retains
-  ≈microsecond precision. `currentTime` / `σ_t` uniforms MUST use the same rebased frame.
 - **`t0` is not stored; it is derived — over the effective record set.** `t0` is the minimum
   timestamp over the model's **effective** records: after joining the sidecars to the base model
   and dropping dangling ids (I.D), take `min` over `times` ∪ `points_t`. Defining t0 on the
@@ -293,6 +292,16 @@ wants per-device rows (e.g. the exposure Gantt chart), it MAY group images by a 
 or embedded camera token (`cam03/...`, `camXX.png`). This grouping MUST be labeled "inferred
 from filename" in the UI and is never authoritative — it is a viewer convenience documented
 with the viewer, not part of the model.
+
+## II.5 — Rebasing timestamps for GPU rendering
+
+A consumer that uploads time to the GPU SHOULD NOT place raw int64 ns into a float32 vertex
+attribute: ~1.7e18 ns overflows float32's 24-bit mantissa. It SHOULD first **rebase**: compute
+`t0` (the model's effective min, I.B) and upload `(t − t0)` in **seconds as float32**. Over a
+single capture this spans seconds and retains ≈microsecond precision. `currentTime` / `σ_t`
+uniforms SHOULD use the same rebased frame. (This is a rendering best practice, not a protocol
+obligation: it constrains a consumer's compute process, which Part I does not govern and
+conformance cannot check. The reference implementation provides `rebase_to_seconds_f32(t, t0)`.)
 
 ---
 
