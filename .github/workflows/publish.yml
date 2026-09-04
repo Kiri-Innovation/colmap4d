@@ -15,6 +15,7 @@ permissions:
 jobs:
   build-and-publish:
     runs-on: ubuntu-latest
+    environment: pypi # must match the environment set on PyPI's pending/trusted publisher
     permissions:
       id-token: write # OIDC token for Trusted Publishing (no PyPI secret needed)
     steps:
