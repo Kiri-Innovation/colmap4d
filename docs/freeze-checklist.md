@@ -31,6 +31,12 @@
       dead link is permanently baked in. **v1.0.0 shipped this way**: the repo-URL fix (`272142d`)
       landed *after* the tag (`362fc30`), so v1.0.0's tree still holds `colmap4d/colmap4d`. Handled
       by releasing 1.0.1 (package axis) rather than moving the tag — the textbook dual-version case.
+- [ ] **Release-environment config verified before first use.** Publish-time configuration
+      (Trusted-Publishing `environment:` binding, PyPI pending-publisher fields) must be cross-checked
+      to match on both sides *before* the first release run. Expect such hardening commits to land
+      **after** the tag they fix (v1.0.1's `environment: pypi` binding `8d17c59` is on `main`, not in
+      the `v1.0.1` tree) — that is intended; do **not** backfill/move the tag. The fix rides the next
+      release.
 
 ## Not gating (can follow v1.0, as new optional/informative work)
 - Converters beyond `per_frame_colmap` (nerfstudio bidirectional, Neu3D, HyperNeRF, EuRoC/TUM).
