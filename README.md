@@ -60,3 +60,5 @@ Uploading time to a GPU (4DGS/NeRF)? Rebase first — raw epoch ns overflows flo
 ## License
 
 [Apache-2.0](https://github.com/Kiri-Innovation/colmap4d/blob/main/LICENSE).
+
+<!-- link-audit: all README external links verified absolute (2026-09-04, PyPI render safety) -->
