@@ -85,6 +85,17 @@ class ModelView:
             raise KeyError(f"point3D {point3d_id} not in model")
         return self.sidecars.points_t.get(point3d_id, TIMELESS)
 
+    def t0_ns(self) -> int | None:
+        """Rebase origin = min timestamp over the model's **effective** records (spec I.B).
+
+        Computed over the dangling-dropped join (``effective_times`` ∪ ``effective_points_t``),
+        so a dangling id with an early timestamp cannot shift t0 — this is the authoritative t0
+        two implementations must agree on. ``None`` if the model carries no timestamps.
+        (``Sidecars.t0_ns`` is the model-less approximation over raw records.)
+        """
+        vals = list(self.effective_times().values()) + list(self.effective_points_t().values())
+        return min(vals) if vals else None
+
 
 def load_model_view(model_dir: str | Path, strict: bool = False) -> ModelView:
     """Read the COLMAP model (zero-dep) + sidecars and return a joined :class:`ModelView`."""

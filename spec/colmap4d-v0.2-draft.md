@@ -128,10 +128,16 @@ coverage is normally complete for a given capture.
   A consumer MUST first **rebase**: compute `t0 = min` timestamp over the model and upload
   `(t − t0)` in **seconds as float32**. Over a single capture this spans seconds and retains
   ≈microsecond precision. `currentTime` / `σ_t` uniforms MUST use the same rebased frame.
-- **`t0` is not stored.** It is derived as the minimum timestamp across the model
-  (over `times` ∪ `points_t`), giving a single source of truth. Storing it would create a
-  second, drift-prone copy. The reference implementation provides `rebase_to_seconds_f32(t, t0)`
-  and `Sidecars.t0_ns()`.
+- **`t0` is not stored; it is derived — over the effective record set.** `t0` is the minimum
+  timestamp over the model's **effective** records: after joining the sidecars to the base model
+  and dropping dangling ids (I.D), take `min` over `times` ∪ `points_t`. Defining t0 on the
+  joined set (not the raw sidecar records) makes it **independent of dangling early timestamps**,
+  so two conformant implementations compute the *same* t0 — a consistency requirement (a dangling
+  id with an early time would otherwise shift t0 in one reader but not another). The reference
+  implementation: `ModelView.t0_ns()` computes this; `Sidecars.t0_ns()` (no base model available)
+  returns `min` over the raw records and is therefore an **approximation** that MAY be earlier if
+  a dangling id carries an early timestamp. Storing t0 is forbidden (it would be a second,
+  drift-prone copy).
 
 ## I.C — `time_meta.json` fields — **FROZEN (top-level field set)**
 

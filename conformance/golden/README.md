@@ -101,3 +101,9 @@ A model with `times.txt` but **no** `time_meta.json` (and no `points_t`). Loadin
 the timestamps are a valid relative axis but carry no declared clock domain / exposure
 convention (MUST NOT be compared across models or to wall-clock). `validate` reports a
 **WARNING** `time_meta.absent` (exit 0; `--strict` promotes).
+
+## `dangling_early/` — t0 is the effective (dangling-dropped) min (spec I.B)
+
+`points_t` has a dangling id `999` at an EARLY time (`…000000000`); in-model points/images are at
+`…200000000`. `ModelView.t0_ns()` (model-joined) MUST be `…200000000` — the dangling early time
+must not shift t0. `Sidecars.t0_ns()` (no model) is the approximation and returns `…000000000`.
