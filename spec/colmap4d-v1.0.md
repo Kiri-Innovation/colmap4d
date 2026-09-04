@@ -359,7 +359,7 @@ read/write `groups.txt`); it is a tool output, not part of the model's normative
 # Part IV — Ecosystem (Informative)
 
 colmap4d is adopted through tools, not through the spec — the spec earns trust, the tools earn
-adoption. The reference repo (`colmap4d/colmap4d`) is organized around three roles:
+adoption. The reference repo (`Kiri-Innovation/colmap4d`) is organized around three roles:
 
 - **Reference implementation (the reader/consumer entry).** `colmap4d.sidecar` is the
   zero-dependency time layer; `colmap4d.colmap_io` is a zero-dependency COLMAP base-model

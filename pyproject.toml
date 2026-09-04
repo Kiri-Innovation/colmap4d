@@ -33,10 +33,10 @@ model = ["pycolmap>=0.6"]
 dev = ["pytest>=7", "ruff>=0.4"]
 
 [project.urls]
-Homepage = "https://github.com/colmap4d/colmap4d"
-Repository = "https://github.com/colmap4d/colmap4d"
-Specification = "https://github.com/colmap4d/colmap4d/blob/main/spec/colmap4d-v1.0.md"
-Changelog = "https://github.com/colmap4d/colmap4d/blob/main/spec/CHANGELOG.md"
+Homepage = "https://github.com/Kiri-Innovation/colmap4d"
+Repository = "https://github.com/Kiri-Innovation/colmap4d"
+Specification = "https://github.com/Kiri-Innovation/colmap4d/blob/main/spec/colmap4d-v1.0.md"
+Changelog = "https://github.com/Kiri-Innovation/colmap4d/blob/main/spec/CHANGELOG.md"
 
 [tool.setuptools.packages.find]
 where = ["src"]

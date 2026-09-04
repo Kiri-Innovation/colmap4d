@@ -9,7 +9,7 @@ authors:
   - name: "colmap4d authors"
 version: 1.0.0
 license: Apache-2.0
-repository-code: "https://github.com/colmap4d/colmap4d"
+repository-code: "https://github.com/Kiri-Innovation/colmap4d"
 keywords:
   - COLMAP
   - structure-from-motion
