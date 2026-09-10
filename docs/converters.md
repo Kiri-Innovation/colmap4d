@@ -40,6 +40,88 @@ Notes:
 
 A `colmap4d convert` **command-line interface is not built yet** — use the Python API above.
 
+### fixed-rig multi-camera → colmap4d — **Python API + tools (implemented)**
+
+Convert synchronized multi-camera video captures from a fixed rig (intrinsics + extrinsics
+pre-calibrated, poses reused across all frames) into colmap4d.
+
+**Pipeline:**
+
+1. **Calibrate the rig** (once per physical setup):
+
+   ```bash
+   python scripts/calibrate_rig.py \
+       --images calib_frames/*.jpg \
+       --rig-id "studio-rig-01" \
+       --output rig_calibration.json \
+       --colmap /path/to/colmap
+   ```
+
+   Input: N calibration images (one per camera, same instant, wide baseline recommended).  
+   Output: `rig_calibration.json` with intrinsics + extrinsics for each camera.
+
+   Key parameters for challenging multi-camera arrays:
+   - `--ImageReader.single_camera 1` (shared intrinsics across cameras)
+   - `--FeatureMatching.guided_matching 1` (helps isolated cameras register)
+   - `--SiftExtraction.max_num_features 32768` (denser features for sparse overlap)
+
+2. **Convert videos + timestamps to colmap4d**:
+
+   ```python
+   from colmap4d.convert.fixed_rig import convert_fixed_rig_to_colmap4d, TimestampedImage
+
+   # Parse timestamps from sidecars (per-camera frame metadata)
+   images = [
+       TimestampedImage(
+           camera_name="cam0",
+           frame_index=0,
+           timestamp_ns=1234567890000000,
+       ),
+       # ... for each frame from each camera
+   ]
+
+   convert_fixed_rig_to_colmap4d(
+       calibration_path="rig_calibration.json",
+       images=images,
+       output_dir="out/sparse",
+       clock_domain="utc_ntp",
+   )
+   ```
+
+   This writes the sparse model (images.bin, cameras.txt, empty points3D.txt by default) +
+   sidecars (times.txt, time_meta.json).
+
+3. **Extract video frames to match model NAMEs**:
+
+   ```bash
+   python scripts/extract_frames_from_videos.py \
+       --model-dir out/sparse \
+       --shoot-dir /path/to/shoot_dir \
+       --output-dir out/sparse/images \
+       --resolution 1920x1440 \
+       --jpeg-quality 85
+   ```
+
+   Reads `images.bin` to get required image NAMEs (like `frame_0007/cam0.jpg`), extracts
+   corresponding frames from `<shoot_dir>/<cam_id>/video.mp4` using timestamp sidecars to map
+   `frameIndex → video_position`, and writes resized JPEGs to the output directory.
+
+   Handles edge cases:
+   - Cameras starting at different `frameIndex` values (not all start at 0)
+   - Sidecar/video frame count mismatches (e.g., recording stopped abruptly)
+   - Parallel extraction (4 cameras by default) for efficiency
+
+**Notes:**
+
+- **Static points:** If 3D points are triangulated from calibration frames and represent static
+  structure, they should be marked as **temporally-unbounded** (omit from `points_t.txt` or write
+  empty file) so they're visible at all time steps in viewers. This matches spec I.A semantics.
+- **Frame mapping:** `frameIndex` in sidecar ≠ video frame position. The tool builds a map using
+  sidecar order (Nth frame entry → Nth video frame).
+- **Data quality:** If sidecar has more frame entries than the video contains (e.g., abrupt stop),
+  the tool warns but continues. Missing frames at sequence end are usually safe if not referenced
+  by 3D points.
+
 ## Planned
 
 Not yet implemented (contributions welcome, via the Tier-1 flow in
