@@ -94,7 +94,7 @@ pre-calibrated, poses reused across all frames) into colmap4d.
 3. **Extract video frames to match model NAMEs**:
 
    ```bash
-   python scripts/extract_frames_from_videos.py \
+   python scripts/extract_frames.py \
        --model-dir out/sparse \
        --shoot-dir /path/to/shoot_dir \
        --output-dir out/sparse/images \
@@ -103,12 +103,21 @@ pre-calibrated, poses reused across all frames) into colmap4d.
    ```
 
    Reads `images.bin` to get required image NAMEs (like `frame_0007/cam0.jpg`), extracts
-   corresponding frames from `<shoot_dir>/<cam_id>/video.mp4` using timestamp sidecars to map
-   `frameIndex → video_position`, and writes resized JPEGs to the output directory.
+   corresponding frames from `<shoot_dir>/<cam_id>/video.mp4` using **timestamp matching** with
+   offset correction, and writes resized JPEGs to the output directory.
+
+   The tool:
+   - Reads actual PTS timestamps from video frames
+   - Estimates per-camera systematic timing offsets
+   - Matches sidecar timestamps to video frames (threshold: 5ms)
+   - Only extracts frames with successful matches (<1ms typical error)
+   - Rebuilds the model to ensure strict 1:1 correspondence (images ↔ times.txt)
+   - Reports per-camera match statistics and unmatched frame reasons
 
    Handles edge cases:
-   - Cameras starting at different `frameIndex` values (not all start at 0)
-   - Sidecar/video frame count mismatches (e.g., recording stopped abruptly)
+   - Encoder-dropped frames (sidecar records more frames than video contains)
+   - Per-camera systematic timing offsets (encoder processing delays)
+   - Cameras starting at different `frameIndex` values
    - Parallel extraction (4 cameras by default) for efficiency
 
 **Notes:**
@@ -116,11 +125,11 @@ pre-calibrated, poses reused across all frames) into colmap4d.
 - **Static points:** If 3D points are triangulated from calibration frames and represent static
   structure, they should be marked as **temporally-unbounded** (omit from `points_t.txt` or write
   empty file) so they're visible at all time steps in viewers. This matches spec I.A semantics.
-- **Frame mapping:** `frameIndex` in sidecar ≠ video frame position. The tool builds a map using
-  sidecar order (Nth frame entry → Nth video frame).
-- **Data quality:** If sidecar has more frame entries than the video contains (e.g., abrupt stop),
-  the tool warns but continues. Missing frames at sequence end are usually safe if not referenced
-  by 3D points.
+- **Frame mapping:** Uses timestamp matching, NOT index mapping. Sidecar records all sensor frames;
+  video only contains encoded frames. The tool matches by absolute time (firstTimestampNs anchor)
+  and skips unmatched frames rather than risk incorrect associations.
+- **Data quality:** The rebuilt model is guaranteed consistent — every image in `images.bin` has a
+  corresponding file and `times.txt` entry. Typical match rate: 95-96% (4-5% lost to encoder drops).
 
 ## Planned
 

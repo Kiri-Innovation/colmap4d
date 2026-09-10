@@ -1,5 +1,17 @@
 #!/usr/bin/env python3
-"""Extract frames from videos according to colmap4d model image names.
+"""DEPRECATED: This script has a critical bug and should not be used.
+
+BUG: Assumes "Nth sidecar entry = Nth video frame", which breaks when encoder drops
+frames. This causes duplicate images and incorrect timestamp associations.
+
+USE INSTEAD: extract_frames.py (timestamp matching with offset correction)
+
+See git commit b0e472f for details on the bug and fix.
+
+---
+
+Original description:
+Extract frames from videos according to colmap4d model image names.
 
 Reads a colmap4d model's images.bin, extracts the corresponding frames from source
 videos using timestamp sidecars to map frameIndex → video frame position, and writes
