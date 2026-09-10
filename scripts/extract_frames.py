@@ -161,8 +161,13 @@ def extract_camera_frames(
     output_base: Path,
     target_resolution: str,
     jpeg_quality: int,
+    rotate_cw_degrees: int = 0,
 ) -> Dict[str, any]:
-    """Extract frames with timestamp matching + offset correction."""
+    """Extract frames with timestamp matching + offset correction.
+
+    Args:
+        rotate_cw_degrees: Clockwise rotation (0, 90, 180, 270)
+    """
 
     # Read video and sidecar
     video_pts = read_video_pts(video_path)
@@ -200,10 +205,25 @@ def extract_camera_frames(
         tmp_path = Path(tmp_dir)
         width, height = target_resolution.split('x')
 
+        # Build video filter chain
+        vf_filters = [f"scale={width}:{height}"]
+
+        # Add rotation if requested
+        if rotate_cw_degrees == 90:
+            vf_filters.append("transpose=1")  # Clockwise 90°
+        elif rotate_cw_degrees == 180:
+            vf_filters.append("transpose=1,transpose=1")  # 180°
+        elif rotate_cw_degrees == 270:
+            vf_filters.append("transpose=2")  # Counter-clockwise 90° (= CW 270°)
+        elif rotate_cw_degrees != 0:
+            raise ValueError(f"Invalid rotation: {rotate_cw_degrees}, must be 0/90/180/270")
+
+        vf_chain = ",".join(vf_filters)
+
         # Decode entire video
         cmd = [
             "ffmpeg", "-i", str(video_path),
-            "-vf", f"scale={width}:{height}",
+            "-vf", vf_chain,
             "-q:v", str(100 - jpeg_quality),
             "-start_number", "0",
             str(tmp_path / "frame_%05d.jpg"),
@@ -308,9 +328,12 @@ def main():
     parser.add_argument("--model-dir", type=Path, required=True)
     parser.add_argument("--shoot-dir", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
-    parser.add_argument("--resolution", default="1920x1440")
+    parser.add_argument("--resolution", default="1920x1440",
+                        help="Target resolution WxH (before rotation, e.g. 1920x1440)")
     parser.add_argument("--jpeg-quality", type=int, default=85)
     parser.add_argument("--max-workers", type=int, default=4)
+    parser.add_argument("--rotate-cw", type=int, default=0, choices=[0, 90, 180, 270],
+                        help="Rotate frames clockwise (degrees): 0, 90, 180, or 270")
 
     args = parser.parse_args()
 
@@ -357,7 +380,8 @@ def main():
             print(f"  📹 {camera_id[:8]}: processing...")
             future = executor.submit(
                 extract_camera_frames, camera_id, video_path, sidecar_path,
-                frame_indices, args.output_dir, args.resolution, args.jpeg_quality
+                frame_indices, args.output_dir, args.resolution, args.jpeg_quality,
+                args.rotate_cw
             )
             futures[future] = camera_id
 
