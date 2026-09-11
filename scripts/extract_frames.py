@@ -64,25 +64,43 @@ def read_video_pts(video_path: Path) -> List[float]:
     return [float(line.strip()) for line in result.stdout.strip().split('\n') if line.strip()]
 
 
-def parse_sidecar(sidecar_path: Path) -> Tuple[int, List[Tuple[int, int]]]:
-    """Parse sidecar to get anchor and frame list.
+def parse_sidecar(sidecar_path: Path) -> Tuple[int, List[Tuple[int, int]], Optional[int]]:
+    """Parse sidecar to get anchor, frame list, and rotation.
 
     Returns:
-        (first_timestamp_ns, [(frameIndex, timestampNs), ...])
+        (first_timestamp_ns, [(frameIndex, timestampNs), ...], videoRotationDegreesCW or None)
+
+    The rotation field is read from header.videoRotationDegreesCW (if present).
+    Returns None for old sidecars that lack this field.
     """
     lines = sidecar_path.read_text().strip().split('\n')
+
+    # Parse header (first line) for rotation
+    header = json.loads(lines[0])
+    if header.get("type") != "header":
+        raise ValueError(f"Expected header at start of {sidecar_path}")
+
+    rotation_degrees = header.get("videoRotationDegreesCW")  # None if missing
+
+    # Validate rotation if present
+    if rotation_degrees is not None and rotation_degrees not in [0, 90, 180, 270]:
+        raise ValueError(f"Invalid videoRotationDegreesCW in sidecar: {rotation_degrees}, must be 0/90/180/270")
+
+    # Parse footer for first timestamp
     footer = json.loads(lines[-1])
     if footer.get("type") != "footer":
         raise ValueError(f"Expected footer at end of {sidecar_path}")
 
     first_timestamp_ns = footer["firstTimestampNs"]
+
+    # Parse frame entries
     frames = []
     for line in lines[1:-1]:
         data = json.loads(line)
         if data.get("type") == "frame":
             frames.append((data["frameIndex"], data["timestampNs"]))
 
-    return first_timestamp_ns, frames
+    return first_timestamp_ns, frames, rotation_degrees
 
 
 def estimate_offset(
@@ -161,17 +179,25 @@ def extract_camera_frames(
     output_base: Path,
     target_resolution: str,
     jpeg_quality: int,
-    rotate_cw_degrees: int = 0,
+    rotate_cw_degrees: Optional[int] = None,
 ) -> Dict[str, any]:
     """Extract frames with timestamp matching + offset correction.
 
     Args:
-        rotate_cw_degrees: Clockwise rotation (0, 90, 180, 270)
+        rotate_cw_degrees: Clockwise rotation (0, 90, 180, 270).
+            Priority: explicit CLI arg > sidecar header > 0 (no rotation).
+            Pass None to auto-detect from sidecar.
     """
 
     # Read video and sidecar
     video_pts = read_video_pts(video_path)
-    first_timestamp_ns, sidecar_frames = parse_sidecar(sidecar_path)
+    first_timestamp_ns, sidecar_frames, sidecar_rotation = parse_sidecar(sidecar_path)
+
+    # Determine rotation: CLI arg > sidecar > default 0
+    if rotate_cw_degrees is None:
+        # No explicit CLI arg, use sidecar or default
+        rotate_cw_degrees = sidecar_rotation if sidecar_rotation is not None else 0
+    # else: use explicit CLI arg (takes priority)
 
     # Filter to needed frames
     sidecar_frames_needed = [(idx, t) for idx, t in sidecar_frames
@@ -332,8 +358,10 @@ def main():
                         help="Target resolution WxH (before rotation, e.g. 1920x1440)")
     parser.add_argument("--jpeg-quality", type=int, default=85)
     parser.add_argument("--max-workers", type=int, default=4)
-    parser.add_argument("--rotate-cw", type=int, default=0, choices=[0, 90, 180, 270],
-                        help="Rotate frames clockwise (degrees): 0, 90, 180, or 270")
+    parser.add_argument("--rotate-cw", type=int, default=None, choices=[0, 90, 180, 270],
+                        help="Rotate frames clockwise (degrees): 0, 90, 180, or 270. "
+                             "If not specified, auto-detects from sidecar header (videoRotationDegreesCW). "
+                             "Priority: explicit CLI > sidecar > 0 (no rotation).")
 
     args = parser.parse_args()
 
