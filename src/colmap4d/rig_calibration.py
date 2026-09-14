@@ -166,14 +166,13 @@ def validate_rig_calibration(
         errors.append("quality.mean_reproj_error_px is required")
     elif calib.quality["mean_reproj_error_px"] > 2.0:
         errors.append(
-            f"High reprojection error: {calib.quality['mean_reproj_error_px']:.2f}px (threshold: 2.0px)"
+            f"High reprojection error: {calib.quality['mean_reproj_error_px']:.2f}px "
+            "(threshold: 2.0px)"
         )
 
     if "num_3d_points" not in calib.quality:
         errors.append("quality.num_3d_points is required")
     elif calib.quality["num_3d_points"] < 50:
-        errors.append(
-            f"Too few 3D points: {calib.quality['num_3d_points']} (minimum: 50)"
-        )
+        errors.append(f"Too few 3D points: {calib.quality['num_3d_points']} (minimum: 50)")
 
     return errors

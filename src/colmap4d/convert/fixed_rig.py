@@ -145,7 +145,8 @@ def convert_fixed_rig_to_colmap4d(
     camera_id_map = _write_cameras_txt(output_dir / "cameras.txt", calibration)
 
     # Build images using colmap_io structures
-    from colmap4d.colmap_io import write_images_bin, Image as ColmapImage
+    from colmap4d.colmap_io import Image as ColmapImage
+    from colmap4d.colmap_io import write_images_bin
 
     colmap_images = {}
     times_dict = {}
@@ -180,7 +181,7 @@ def convert_fixed_rig_to_colmap4d(
     _write_points3d_txt(output_dir / "points3D.txt")
 
     # Write colmap4d sidecars
-    print(f"📝 Writing colmap4d sidecars...")
+    print("📝 Writing colmap4d sidecars...")
 
     # times.txt
     sidecar.write_times_txt(output_dir / "times.txt", image_times)
@@ -196,7 +197,7 @@ def convert_fixed_rig_to_colmap4d(
     }
     sidecar.write_time_meta(output_dir / "time_meta.json", meta)
 
-    print(f"\n✅ Conversion complete!")
+    print("\n✅ Conversion complete!")
     print(f"   Output: {output_dir}")
     print(f"   Images: {len(images)}")
     print(f"   Frames: {len(set(img.frame_index for img in images))}")

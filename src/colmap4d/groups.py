@@ -45,7 +45,7 @@ def group_by_time(
     grouped = [False] * len(sorted_items)
     groups = []
 
-    for i, (seed_id, seed_t) in enumerate(sorted_items):
+    for i, (_seed_id, seed_t) in enumerate(sorted_items):
         if grouped[i]:
             continue
 
