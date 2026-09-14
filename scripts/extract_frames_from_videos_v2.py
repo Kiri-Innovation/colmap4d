@@ -31,6 +31,7 @@ Background:
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import json
 import struct
 import subprocess
@@ -38,12 +39,9 @@ import sys
 import tempfile
 from collections import defaultdict
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional
-
-import concurrent.futures
 
 
-def read_images_bin(images_bin_path: Path) -> List[Tuple[int, str]]:
+def read_images_bin(images_bin_path: Path) -> list[tuple[int, str]]:
     """Read (image_id, name) from images.bin."""
     images = []
 
@@ -71,7 +69,7 @@ def read_images_bin(images_bin_path: Path) -> List[Tuple[int, str]]:
     return images
 
 
-def parse_image_name(name: str) -> Tuple[int, str]:
+def parse_image_name(name: str) -> tuple[int, str]:
     """Parse image name to (frame_index, camera_id)."""
     parts = name.split("/")
     frame_index = int(parts[0].replace("frame_", ""))
@@ -79,29 +77,33 @@ def parse_image_name(name: str) -> Tuple[int, str]:
     return frame_index, camera_id
 
 
-def read_video_pts(video_path: Path) -> List[float]:
+def read_video_pts(video_path: Path) -> list[float]:
     """Read PTS (presentation timestamp in seconds) for all video frames."""
     cmd = [
         "ffprobe",
-        "-v", "error",
-        "-select_streams", "v:0",
-        "-show_entries", "packet=pts_time",
-        "-of", "csv=p=0",
+        "-v",
+        "error",
+        "-select_streams",
+        "v:0",
+        "-show_entries",
+        "packet=pts_time",
+        "-of",
+        "csv=p=0",
         str(video_path),
     ]
 
     result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-    pts_values = [float(line.strip()) for line in result.stdout.strip().split('\n') if line.strip()]
+    pts_values = [float(line.strip()) for line in result.stdout.strip().split("\n") if line.strip()]
     return pts_values
 
 
-def parse_sidecar(sidecar_path: Path) -> Tuple[int, List[Tuple[int, int, int]]]:
+def parse_sidecar(sidecar_path: Path) -> tuple[int, list[tuple[int, int, int]]]:
     """Parse sidecar to extract anchor timestamp and frame entries.
 
     Returns:
         (first_timestamp_ns, [(frameIndex, timestampNs_realtime, exposureNs), ...])
     """
-    lines = sidecar_path.read_text().strip().split('\n')
+    lines = sidecar_path.read_text().strip().split("\n")
 
     # Read header
     header = json.loads(lines[0])
@@ -131,12 +133,12 @@ def parse_sidecar(sidecar_path: Path) -> Tuple[int, List[Tuple[int, int, int]]]:
 
 
 def match_sidecar_to_video(
-    sidecar_frames: List[Tuple[int, int, int]],
-    video_pts: List[float],
+    sidecar_frames: list[tuple[int, int, int]],
+    video_pts: list[float],
     first_timestamp_ns: int,
-    clock_offset_ns: int,
+    _clock_offset_ns: int,
     match_threshold_ns: int = 5_000_000,  # 5ms default
-) -> Tuple[Dict[int, Tuple[int, float]], List[Tuple[int, str]]]:
+) -> tuple[dict[int, tuple[int, float]], list[tuple[int, str]]]:
     """Match sidecar entries to video frames by timestamp.
 
     Args:
@@ -158,13 +160,13 @@ def match_sidecar_to_video(
     matches = {}
     unmatched = []
 
-    for frame_idx, timestamp_realtime_ns, exposure_ns in sidecar_frames:
+    for frame_idx, timestamp_realtime_ns, _exposure_ns in sidecar_frames:
         # Sidecar timestamp is already in realtime, matches firstTimestampNs domain
         sidecar_t_ns = timestamp_realtime_ns
 
         # Find closest video frame
         best_video_pos = None
-        best_error_ns = float('inf')
+        best_error_ns = float("inf")
 
         for video_pos, video_t_ns in enumerate(video_timestamps_ns):
             error_ns = abs(sidecar_t_ns - video_t_ns)
@@ -176,7 +178,10 @@ def match_sidecar_to_video(
         if best_error_ns < match_threshold_ns:
             matches[frame_idx] = (best_video_pos, best_error_ns)
         else:
-            reason = f"no_video_frame_within_{match_threshold_ns/1e6:.1f}ms (closest: {best_error_ns/1e6:.1f}ms)"
+            reason = (
+                f"no_video_frame_within_{match_threshold_ns / 1e6:.1f}ms "
+                f"(closest: {best_error_ns / 1e6:.1f}ms)"
+            )
             unmatched.append((frame_idx, reason))
 
     return matches, unmatched
@@ -186,11 +191,11 @@ def extract_camera_frames(
     camera_id: str,
     video_path: Path,
     sidecar_path: Path,
-    needed_frame_indices: List[int],
+    needed_frame_indices: list[int],
     output_base: Path,
     target_resolution: str,
     jpeg_quality: int,
-) -> Dict[str, any]:
+) -> dict[str, any]:
     """Extract frames using timestamp matching."""
 
     # Read video PTS
@@ -200,7 +205,9 @@ def extract_camera_frames(
     first_timestamp_ns, sidecar_frames, clock_offset_ns = parse_sidecar(sidecar_path)
 
     # Filter sidecar to only needed frames
-    sidecar_frames_needed = [(idx, t, e) for idx, t, e in sidecar_frames if idx in needed_frame_indices]
+    sidecar_frames_needed = [
+        (idx, t, e) for idx, t, e in sidecar_frames if idx in needed_frame_indices
+    ]
 
     # Match sidecar to video
     matches, unmatched = match_sidecar_to_video(
@@ -229,17 +236,22 @@ def extract_camera_frames(
         tmp_path = Path(tmp_dir)
 
         # Decode entire video to temp (most efficient for high match ratio)
-        width, height = target_resolution.split('x')
+        width, height = target_resolution.split("x")
 
         cmd = [
             "ffmpeg",
-            "-i", str(video_path),
-            "-vf", f"scale={width}:{height}",
-            "-q:v", str(100 - jpeg_quality),
-            "-start_number", "0",
+            "-i",
+            str(video_path),
+            "-vf",
+            f"scale={width}:{height}",
+            "-q:v",
+            str(100 - jpeg_quality),
+            "-start_number",
+            "0",
             str(tmp_path / "frame_%05d.jpg"),
             "-hide_banner",
-            "-loglevel", "error",
+            "-loglevel",
+            "error",
         ]
 
         subprocess.run(cmd, check=True)
@@ -254,6 +266,7 @@ def extract_camera_frames(
 
             if src_frame.exists():
                 import shutil
+
                 shutil.copy2(src_frame, dst_frame)
             else:
                 print(f"  ⚠️  Missing decoded frame: {src_frame}")
@@ -274,7 +287,7 @@ def rebuild_model_for_available_images(
         available_image_ids: Set of image_ids that have extracted images
         output_dir: Output directory for rebuilt model
     """
-    print(f"\n🔄 Rebuilding model to match available images...")
+    print("\n🔄 Rebuilding model to match available images...")
 
     # Read original images.bin
     images_bin = model_dir / "images.bin"
@@ -308,14 +321,16 @@ def rebuild_model_for_available_images(
 
             # Keep only if image exists
             if image_id in available_image_ids:
-                new_images.append({
-                    "id": image_id,
-                    "qvec": qvec,
-                    "tvec": tvec,
-                    "camera_id": camera_id,
-                    "name": name,
-                    "points2d": points2d,
-                })
+                new_images.append(
+                    {
+                        "id": image_id,
+                        "qvec": qvec,
+                        "tvec": tvec,
+                        "camera_id": camera_id,
+                        "name": name,
+                        "points2d": points2d,
+                    }
+                )
 
     # Write new images.bin
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -361,6 +376,7 @@ def rebuild_model_for_available_images(
         src = model_dir / file
         if src.exists():
             import shutil
+
             shutil.copy2(src, output_dir / file)
 
     print(f"   Original images: {num_images}")
@@ -378,10 +394,17 @@ def main():
     parser.add_argument("--resolution", default="1920x1440")
     parser.add_argument("--jpeg-quality", type=int, default=85)
     parser.add_argument("--max-workers", type=int, default=4)
-    parser.add_argument("--match-threshold-ms", type=float, default=5.0,
-                        help="Max timestamp error for frame matching (ms, default 5)")
-    parser.add_argument("--rebuild-model", action="store_true",
-                        help="Rebuild model files to exclude unmatched images")
+    parser.add_argument(
+        "--match-threshold-ms",
+        type=float,
+        default=5.0,
+        help="Max timestamp error for frame matching (ms, default 5)",
+    )
+    parser.add_argument(
+        "--rebuild-model",
+        action="store_true",
+        help="Rebuild model files to exclude unmatched images",
+    )
 
     args = parser.parse_args()
 
@@ -392,9 +415,9 @@ def main():
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
-    print("="*80)
+    print("=" * 80)
     print("Frame Extraction (Timestamp Matching v2)")
-    print("="*80)
+    print("=" * 80)
     print(f"Model: {args.model_dir}")
     print(f"Match threshold: {args.match_threshold_ms}ms")
     print()
@@ -416,10 +439,10 @@ def main():
     print(f"   Cameras: {len(camera_frames)}")
 
     # Extract frames
-    print(f"\n🎬 Extracting with timestamp matching...")
+    print("\n🎬 Extracting with timestamp matching...")
 
     all_stats = []
-    match_threshold_ns = int(args.match_threshold_ms * 1_000_000)
+    int(args.match_threshold_ms * 1_000_000)
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.max_workers) as executor:
         futures = {}
@@ -460,19 +483,22 @@ def main():
                     mean_error_ms = sum(errors_ns) / len(errors_ns) / 1e6
                     max_error_ms = max(errors_ns) / 1e6
                     print(f"  ✓ {camera_id[:8]}: {matched} matched, {unmatched} unmatched")
-                    print(f"      Match error: mean {mean_error_ms:.3f}ms, max {max_error_ms:.3f}ms")
+                    print(
+                        f"      Match error: mean {mean_error_ms:.3f}ms, max {max_error_ms:.3f}ms"
+                    )
                 else:
                     print(f"  ⚠️  {camera_id[:8]}: 0 matches")
 
             except Exception as e:
                 print(f"  ✗ {camera_id[:8]}: ERROR - {e}")
                 import traceback
+
                 traceback.print_exc()
 
     # Summary
-    print(f"\n{'='*80}")
-    print(f"📊 Extraction Summary")
-    print(f"{'='*80}")
+    print(f"\n{'=' * 80}")
+    print("📊 Extraction Summary")
+    print(f"{'=' * 80}")
 
     total_requested = sum(s["requested"] for s in all_stats)
     total_matched = sum(s["matched"] for s in all_stats)
@@ -489,14 +515,14 @@ def main():
 
     if all_errors_ms:
         all_errors_ms.sort()
-        print(f"\nMatch error distribution (ms):")
+        print("\nMatch error distribution (ms):")
         print(f"  Mean: {sum(all_errors_ms) / len(all_errors_ms):.3f}")
-        print(f"  Median: {all_errors_ms[len(all_errors_ms)//2]:.3f}")
-        print(f"  P95: {all_errors_ms[int(len(all_errors_ms)*0.95)]:.3f}")
+        print(f"  Median: {all_errors_ms[len(all_errors_ms) // 2]:.3f}")
+        print(f"  P95: {all_errors_ms[int(len(all_errors_ms) * 0.95)]:.3f}")
         print(f"  Max: {max(all_errors_ms):.3f}")
 
     # Unmatched details
-    print(f"\nUnmatched frames by camera:")
+    print("\nUnmatched frames by camera:")
     for s in all_stats:
         if s["unmatched"] > 0:
             cam_id_short = s["camera_id"][:8]
@@ -525,11 +551,11 @@ def main():
         rebuild_model_for_available_images(args.model_dir, available_ids, rebuilt_dir)
 
         print(f"\n✅ Rebuilt model saved to: {rebuilt_dir}")
-        print(f"   Use this model for downstream tasks")
+        print("   Use this model for downstream tasks")
 
     elif total_unmatched > 0:
         print(f"\n⚠️  WARNING: {total_unmatched} images unmatched!")
-        print(f"   Consider using --rebuild-model to create a consistent model")
+        print("   Consider using --rebuild-model to create a consistent model")
 
     print(f"\nOutput directory: {args.output_dir}")
 

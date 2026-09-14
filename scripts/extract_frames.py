@@ -16,6 +16,7 @@ achieve sub-millisecond timestamp accuracy for the vast majority of frames.
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import json
 import struct
 import subprocess
@@ -23,12 +24,9 @@ import sys
 import tempfile
 from collections import defaultdict
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional
-
-import concurrent.futures
 
 
-def read_images_bin(images_bin_path: Path) -> List[Tuple[int, str]]:
+def read_images_bin(images_bin_path: Path) -> list[tuple[int, str]]:
     """Read (image_id, name) from images.bin."""
     images = []
     with open(images_bin_path, "rb") as f:
@@ -48,7 +46,7 @@ def read_images_bin(images_bin_path: Path) -> List[Tuple[int, str]]:
     return images
 
 
-def parse_image_name(name: str) -> Tuple[int, str]:
+def parse_image_name(name: str) -> tuple[int, str]:
     """Parse 'frame_0007/camera_id.jpg' -> (7, 'camera_id')."""
     parts = name.split("/")
     frame_index = int(parts[0].replace("frame_", ""))
@@ -56,15 +54,25 @@ def parse_image_name(name: str) -> Tuple[int, str]:
     return frame_index, camera_id
 
 
-def read_video_pts(video_path: Path) -> List[float]:
+def read_video_pts(video_path: Path) -> list[float]:
     """Read PTS (seconds) for all video frames."""
-    cmd = ["ffprobe", "-v", "error", "-select_streams", "v:0",
-           "-show_entries", "packet=pts_time", "-of", "csv=p=0", str(video_path)]
+    cmd = [
+        "ffprobe",
+        "-v",
+        "error",
+        "-select_streams",
+        "v:0",
+        "-show_entries",
+        "packet=pts_time",
+        "-of",
+        "csv=p=0",
+        str(video_path),
+    ]
     result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-    return [float(line.strip()) for line in result.stdout.strip().split('\n') if line.strip()]
+    return [float(line.strip()) for line in result.stdout.strip().split("\n") if line.strip()]
 
 
-def parse_sidecar(sidecar_path: Path) -> Tuple[int, List[Tuple[int, int]]]:
+def parse_sidecar(sidecar_path: Path) -> tuple[int, list[tuple[int, int]]]:
     """Parse sidecar to get anchor and frame list.
 
     Returns:
@@ -73,7 +81,7 @@ def parse_sidecar(sidecar_path: Path) -> Tuple[int, List[Tuple[int, int]]]:
     Note: Video rotation metadata is handled automatically by ffmpeg's autorotate.
     The sidecar's videoRotationDegreesCW field is informational only.
     """
-    lines = sidecar_path.read_text().strip().split('\n')
+    lines = sidecar_path.read_text().strip().split("\n")
     footer = json.loads(lines[-1])
     if footer.get("type") != "footer":
         raise ValueError(f"Expected footer at end of {sidecar_path}")
@@ -89,8 +97,8 @@ def parse_sidecar(sidecar_path: Path) -> Tuple[int, List[Tuple[int, int]]]:
 
 
 def estimate_offset(
-    sidecar_frames: List[Tuple[int, int]],
-    video_pts: List[float],
+    sidecar_frames: list[tuple[int, int]],
+    video_pts: list[float],
     first_timestamp_ns: int,
     sample_size: int = 100,
 ) -> int:
@@ -121,12 +129,12 @@ def estimate_offset(
 
 
 def match_sidecar_to_video(
-    sidecar_frames: List[Tuple[int, int]],
-    video_pts: List[float],
+    sidecar_frames: list[tuple[int, int]],
+    video_pts: list[float],
     first_timestamp_ns: int,
     offset_ns: int,
     match_threshold_ns: int = 5_000_000,
-) -> Tuple[Dict[int, Tuple[int, int]], List[Tuple[int, str]]]:
+) -> tuple[dict[int, tuple[int, int]], list[tuple[int, str]]]:
     """Match sidecar entries to video frames with offset correction.
 
     Returns:
@@ -135,22 +143,22 @@ def match_sidecar_to_video(
         unmatched: [(frameIndex, reason), ...]
     """
     # Build video timestamp array (with offset correction)
-    video_timestamps = [first_timestamp_ns + int(pts * 1e9) + offset_ns
-                       for pts in video_pts]
+    video_timestamps = [first_timestamp_ns + int(pts * 1e9) + offset_ns for pts in video_pts]
 
     matches = {}
     unmatched = []
 
     for frame_idx, sidecar_t_ns in sidecar_frames:
         # Find closest video frame
-        best_pos = min(range(len(video_timestamps)),
-                      key=lambda i: abs(video_timestamps[i] - sidecar_t_ns))
+        best_pos = min(
+            range(len(video_timestamps)), key=lambda i: abs(video_timestamps[i] - sidecar_t_ns)
+        )
         error_ns = abs(video_timestamps[best_pos] - sidecar_t_ns)
 
         if error_ns < match_threshold_ns:
             matches[frame_idx] = (best_pos, error_ns)
         else:
-            reason = f"error_{error_ns/1e6:.1f}ms"
+            reason = f"error_{error_ns / 1e6:.1f}ms"
             unmatched.append((frame_idx, reason))
 
     return matches, unmatched
@@ -160,11 +168,11 @@ def extract_camera_frames(
     camera_id: str,
     video_path: Path,
     sidecar_path: Path,
-    needed_frame_indices: List[int],
+    needed_frame_indices: list[int],
     output_base: Path,
     target_resolution: str,
     jpeg_quality: int,
-) -> Dict[str, any]:
+) -> dict[str, any]:
     """Extract frames with timestamp matching + offset correction.
 
     Video rotation is handled automatically by ffmpeg's autorotate feature,
@@ -181,8 +189,7 @@ def extract_camera_frames(
     first_timestamp_ns, sidecar_frames = parse_sidecar(sidecar_path)
 
     # Filter to needed frames
-    sidecar_frames_needed = [(idx, t) for idx, t in sidecar_frames
-                              if idx in needed_frame_indices]
+    sidecar_frames_needed = [(idx, t) for idx, t in sidecar_frames if idx in needed_frame_indices]
 
     # Estimate systematic offset
     offset_ns = estimate_offset(sidecar_frames, video_pts, first_timestamp_ns)
@@ -210,21 +217,30 @@ def extract_camera_frames(
     # Extract matched frames
     with tempfile.TemporaryDirectory(prefix=f"extract_{camera_id[:8]}_") as tmp_dir:
         tmp_path = Path(tmp_dir)
-        width, height = target_resolution.split('x')
+        width, height = target_resolution.split("x")
 
         # Build video filter: scale preserving aspect ratio
         # ffmpeg autorotate applies rotation metadata automatically
         # Scale to fit within target bounds, preserving aspect ratio
-        vf_chain = f"scale='min({width},iw)':'min({height},ih)':force_original_aspect_ratio=decrease"
+        vf_chain = (
+            f"scale='min({width},iw)':'min({height},ih)':force_original_aspect_ratio=decrease"
+        )
 
         # Decode entire video
         cmd = [
-            "ffmpeg", "-i", str(video_path),
-            "-vf", vf_chain,
-            "-q:v", str(100 - jpeg_quality),
-            "-start_number", "0",
+            "ffmpeg",
+            "-i",
+            str(video_path),
+            "-vf",
+            vf_chain,
+            "-q:v",
+            str(100 - jpeg_quality),
+            "-start_number",
+            "0",
             str(tmp_path / "frame_%05d.jpg"),
-            "-hide_banner", "-loglevel", "error",
+            "-hide_banner",
+            "-loglevel",
+            "error",
         ]
         subprocess.run(cmd, check=True)
 
@@ -237,6 +253,7 @@ def extract_camera_frames(
 
             if src.exists():
                 import shutil
+
                 shutil.copy2(src, dst)
             else:
                 stats["matched"] -= 1
@@ -246,7 +263,7 @@ def extract_camera_frames(
 
 def rebuild_model(model_dir: Path, available_image_ids: set, output_dir: Path):
     """Rebuild model files to exclude images without extracted files."""
-    print(f"\n🔄 Rebuilding model...")
+    print("\n🔄 Rebuilding model...")
 
     # Read original images.bin
     new_images = []
@@ -272,10 +289,16 @@ def rebuild_model(model_dir: Path, available_image_ids: set, output_dir: Path):
                 points2d.append((x, y, p3d_id))
 
             if image_id in available_image_ids:
-                new_images.append({
-                    "id": image_id, "qvec": qvec, "tvec": tvec,
-                    "camera_id": camera_id, "name": name, "points2d": points2d,
-                })
+                new_images.append(
+                    {
+                        "id": image_id,
+                        "qvec": qvec,
+                        "tvec": tvec,
+                        "camera_id": camera_id,
+                        "name": name,
+                        "points2d": points2d,
+                    }
+                )
 
     # Write new images.bin
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -313,6 +336,7 @@ def rebuild_model(model_dir: Path, available_image_ids: set, output_dir: Path):
     for file in ["cameras.txt", "points3D.txt", "points_t.txt", "time_meta.json"]:
         if (model_dir / file).exists():
             import shutil
+
             shutil.copy2(model_dir / file, output_dir / file)
 
     print(f"   Original: {num_images} images")
@@ -325,10 +349,13 @@ def main():
     parser.add_argument("--model-dir", type=Path, required=True)
     parser.add_argument("--shoot-dir", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
-    parser.add_argument("--resolution", default="1920x1440",
-                        help="Target resolution WxH (e.g. 1920x1440). Images are scaled to fit "
-                             "within these bounds while preserving aspect ratio. Rotation is "
-                             "handled automatically via ffmpeg autorotate.")
+    parser.add_argument(
+        "--resolution",
+        default="1920x1440",
+        help="Target resolution WxH (e.g. 1920x1440). Images are scaled to fit "
+        "within these bounds while preserving aspect ratio. Rotation is "
+        "handled automatically via ffmpeg autorotate.",
+    )
     parser.add_argument("--jpeg-quality", type=int, default=85)
     parser.add_argument("--max-workers", type=int, default=4)
 
@@ -341,9 +368,9 @@ def main():
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
-    print("="*80)
+    print("=" * 80)
     print("Frame Extraction v3 (Timestamp Matching + Offset Correction)")
-    print("="*80)
+    print("=" * 80)
     print(f"Model: {args.model_dir}")
     print()
 
@@ -361,7 +388,7 @@ def main():
     print(f"   Model: {len(images)} images, {len(camera_frames)} cameras")
 
     # Extract frames
-    print(f"\n🎬 Extracting frames...")
+    print("\n🎬 Extracting frames...")
     all_stats = []
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.max_workers) as executor:
@@ -376,8 +403,14 @@ def main():
 
             print(f"  📹 {camera_id[:8]}: processing...")
             future = executor.submit(
-                extract_camera_frames, camera_id, video_path, sidecar_path,
-                frame_indices, args.output_dir, args.resolution, args.jpeg_quality
+                extract_camera_frames,
+                camera_id,
+                video_path,
+                sidecar_path,
+                frame_indices,
+                args.output_dir,
+                args.resolution,
+                args.jpeg_quality,
             )
             futures[future] = camera_id
 
@@ -392,24 +425,27 @@ def main():
                     mean_err = sum(errors_ms) / len(errors_ms)
                     max_err = max(errors_ms)
                     print(f"  ✓ {camera_id[:8]}: {stats['matched']}/{stats['requested']} matched")
-                    print(f"      Offset: {stats['offset_ms']:.3f}ms, Error: mean {mean_err:.3f}ms, max {max_err:.3f}ms")
+                    print(
+                        f"      Offset: {stats['offset_ms']:.3f}ms, "
+                        f"Error: mean {mean_err:.3f}ms, max {max_err:.3f}ms"
+                    )
                 else:
                     print(f"  ⚠️  {camera_id[:8]}: 0 matches")
             except Exception as e:
                 print(f"  ✗ {camera_id[:8]}: ERROR - {e}")
 
     # Summary
-    print(f"\n{'='*80}")
-    print(f"📊 Summary")
-    print(f"{'='*80}")
+    print(f"\n{'=' * 80}")
+    print("📊 Summary")
+    print(f"{'=' * 80}")
 
     total_req = sum(s["requested"] for s in all_stats)
     total_matched = sum(s["matched"] for s in all_stats)
     total_unmatched = sum(s["unmatched"] for s in all_stats)
 
     print(f"Requested: {total_req}")
-    print(f"Matched: {total_matched} ({100*total_matched/total_req:.1f}%)")
-    print(f"Unmatched: {total_unmatched} ({100*total_unmatched/total_req:.1f}%)")
+    print(f"Matched: {total_matched} ({100 * total_matched / total_req:.1f}%)")
+    print(f"Unmatched: {total_unmatched} ({100 * total_unmatched / total_req:.1f}%)")
 
     # Error distribution
     all_errors_ms = []
@@ -418,21 +454,26 @@ def main():
 
     if all_errors_ms:
         all_errors_ms.sort()
-        print(f"\nMatch error distribution:")
-        print(f"  Mean: {sum(all_errors_ms)/len(all_errors_ms):.3f}ms")
-        print(f"  Median: {all_errors_ms[len(all_errors_ms)//2]:.3f}ms")
-        print(f"  P95: {all_errors_ms[int(len(all_errors_ms)*0.95)]:.3f}ms")
+        print("\nMatch error distribution:")
+        print(f"  Mean: {sum(all_errors_ms) / len(all_errors_ms):.3f}ms")
+        print(f"  Median: {all_errors_ms[len(all_errors_ms) // 2]:.3f}ms")
+        print(f"  P95: {all_errors_ms[int(len(all_errors_ms) * 0.95)]:.3f}ms")
         print(f"  Max: {max(all_errors_ms):.3f}ms")
-        print(f"  <1ms: {sum(1 for e in all_errors_ms if e < 1.0)} ({100*sum(1 for e in all_errors_ms if e < 1.0)/len(all_errors_ms):.1f}%)")
+        print(
+            f"  <1ms: {sum(1 for e in all_errors_ms if e < 1.0)} "
+            f"({100 * sum(1 for e in all_errors_ms if e < 1.0) / len(all_errors_ms):.1f}%)"
+        )
 
     # Per-camera stats
-    print(f"\nPer-camera details:")
+    print("\nPer-camera details:")
     for s in sorted(all_stats, key=lambda x: x["camera_id"]):
         cam_short = s["camera_id"][:8]
         match_rate = 100 * s["matched"] / s["requested"] if s["requested"] > 0 else 0
-        print(f"  {cam_short}: {s['matched']:3d}/{s['requested']:3d} ({match_rate:5.1f}%), "
-              f"offset {s['offset_ms']:6.2f}ms, "
-              f"video {s['video_frames']} frames, sidecar {s['sidecar_frames']} entries")
+        print(
+            f"  {cam_short}: {s['matched']:3d}/{s['requested']:3d} ({match_rate:5.1f}%), "
+            f"offset {s['offset_ms']:6.2f}ms, "
+            f"video {s['video_frames']} frames, sidecar {s['sidecar_frames']} entries"
+        )
 
     # Rebuild model
     print()
@@ -446,10 +487,13 @@ def main():
 
     # Final check
     total_size_mb = sum(f.stat().st_size for f in args.output_dir.rglob("*.jpg")) / (1024**2)
-    print(f"\n✅ Extraction complete!")
+    print("\n✅ Extraction complete!")
     print(f"   Images extracted: {total_matched}")
     print(f"   Rebuilt model: {rebuilt_dir}")
-    print(f"   Disk usage: {total_size_mb:.1f} MB ({total_size_mb/total_matched*1024:.1f} KB/frame)")
+    print(
+        f"   Disk usage: {total_size_mb:.1f} MB "
+        f"({total_size_mb / total_matched * 1024:.1f} KB/frame)"
+    )
 
 
 if __name__ == "__main__":

@@ -40,6 +40,7 @@ The script:
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import json
 import struct
 import subprocess
@@ -47,12 +48,9 @@ import sys
 import tempfile
 from collections import defaultdict
 from pathlib import Path
-from typing import Dict, List, Tuple
-
-import concurrent.futures
 
 
-def read_images_bin(images_bin_path: Path) -> List[str]:
+def read_images_bin(images_bin_path: Path) -> list[str]:
     """Read image NAMEs from images.bin.
 
     Returns:
@@ -84,7 +82,7 @@ def read_images_bin(images_bin_path: Path) -> List[str]:
     return image_names
 
 
-def parse_image_name(name: str) -> Tuple[int, str]:
+def parse_image_name(name: str) -> tuple[int, str]:
     """Parse image name to extract frame_index and camera_id.
 
     Args:
@@ -103,7 +101,7 @@ def parse_image_name(name: str) -> Tuple[int, str]:
     return frame_index, camera_id
 
 
-def build_frame_index_map(sidecar_path: Path) -> Dict[int, int]:
+def build_frame_index_map(sidecar_path: Path) -> dict[int, int]:
     """Build mapping from frameIndex to video frame position.
 
     The sidecar contains frame entries in the order they appear in the video.
@@ -117,7 +115,7 @@ def build_frame_index_map(sidecar_path: Path) -> Dict[int, int]:
     """
     frame_index_to_position = {}
 
-    lines = sidecar_path.read_text().strip().split('\n')
+    lines = sidecar_path.read_text().strip().split("\n")
 
     video_position = 0
     for line in lines[1:]:  # Skip header
@@ -136,11 +134,11 @@ def extract_camera_frames(
     camera_id: str,
     video_path: Path,
     sidecar_path: Path,
-    needed_frame_indices: List[int],
+    needed_frame_indices: list[int],
     output_base: Path,
     target_resolution: str,
     jpeg_quality: int,
-) -> Dict[str, any]:
+) -> dict[str, any]:
     """Extract needed frames for one camera.
 
     Args:
@@ -185,14 +183,24 @@ def extract_camera_frames(
         if extract_ratio > 0.8:
             # Extract all frames (more efficient for high ratio)
             extract_all_and_filter(
-                video_path, tmp_path, positions_to_extract,
-                output_base, camera_id, target_resolution, jpeg_quality
+                video_path,
+                tmp_path,
+                positions_to_extract,
+                output_base,
+                camera_id,
+                target_resolution,
+                jpeg_quality,
             )
         else:
             # Use select filter for sparse extraction
             extract_with_select_filter(
-                video_path, tmp_path, positions_to_extract,
-                output_base, camera_id, target_resolution, jpeg_quality
+                video_path,
+                tmp_path,
+                positions_to_extract,
+                output_base,
+                camera_id,
+                target_resolution,
+                jpeg_quality,
             )
 
         stats = {
@@ -207,7 +215,7 @@ def extract_camera_frames(
 def extract_all_and_filter(
     video_path: Path,
     tmp_path: Path,
-    positions_to_extract: List[Tuple[int, int]],
+    positions_to_extract: list[tuple[int, int]],
     output_base: Path,
     camera_id: str,
     target_resolution: str,
@@ -215,17 +223,22 @@ def extract_all_and_filter(
 ):
     """Extract all frames, then copy needed ones to output."""
     # Decode entire video to temp directory
-    width, height = target_resolution.split('x')
+    width, height = target_resolution.split("x")
 
     cmd = [
         "ffmpeg",
-        "-i", str(video_path),
-        "-vf", f"scale={width}:{height}",
-        "-q:v", str(100 - jpeg_quality),  # ffmpeg uses inverted scale for -q:v
-        "-start_number", "0",
+        "-i",
+        str(video_path),
+        "-vf",
+        f"scale={width}:{height}",
+        "-q:v",
+        str(100 - jpeg_quality),  # ffmpeg uses inverted scale for -q:v
+        "-start_number",
+        "0",
         str(tmp_path / "frame_%05d.jpg"),
         "-hide_banner",
-        "-loglevel", "error",
+        "-loglevel",
+        "error",
     ]
 
     subprocess.run(cmd, check=True)
@@ -242,6 +255,7 @@ def extract_all_and_filter(
         if src_frame.exists():
             # Copy frame
             import shutil
+
             shutil.copy2(src_frame, dst_frame)
         else:
             print(f"  ⚠️  Missing intermediate frame: {src_frame}")
@@ -250,7 +264,7 @@ def extract_all_and_filter(
 def extract_with_select_filter(
     video_path: Path,
     tmp_path: Path,
-    positions_to_extract: List[Tuple[int, int]],
+    positions_to_extract: list[tuple[int, int]],
     output_base: Path,
     camera_id: str,
     target_resolution: str,
@@ -261,25 +275,33 @@ def extract_with_select_filter(
     positions = sorted(set(pos for _, pos in positions_to_extract))
     select_expr = "+".join(f"eq(n\\,{pos})" for pos in positions)
 
-    width, height = target_resolution.split('x')
+    width, height = target_resolution.split("x")
 
     cmd = [
         "ffmpeg",
-        "-i", str(video_path),
-        "-vf", f"select='{select_expr}',scale={width}:{height}",
-        "-vsync", "0",  # Don't duplicate/drop frames
-        "-q:v", str(100 - jpeg_quality),
-        "-start_number", "0",
+        "-i",
+        str(video_path),
+        "-vf",
+        f"select='{select_expr}',scale={width}:{height}",
+        "-vsync",
+        "0",  # Don't duplicate/drop frames
+        "-q:v",
+        str(100 - jpeg_quality),
+        "-start_number",
+        "0",
         str(tmp_path / "selected_%05d.jpg"),
         "-hide_banner",
-        "-loglevel", "error",
+        "-loglevel",
+        "error",
     ]
 
     subprocess.run(cmd, check=True)
 
     # Rename frames to final locations
     # The output frames are numbered 0, 1, 2, ... in the order they were selected
-    position_to_index = {pos: idx for idx, (_, pos) in enumerate(sorted(positions_to_extract, key=lambda x: x[1]))}
+    position_to_index = {
+        pos: idx for idx, (_, pos) in enumerate(sorted(positions_to_extract, key=lambda x: x[1]))
+    }
 
     for frame_idx, video_pos in positions_to_extract:
         selected_idx = position_to_index[video_pos]
@@ -291,6 +313,7 @@ def extract_with_select_filter(
 
         if src_frame.exists():
             import shutil
+
             shutil.copy2(src_frame, dst_frame)
         else:
             print(f"  ⚠️  Missing selected frame: {src_frame}")
@@ -350,9 +373,9 @@ def main():
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
-    print("="*80)
+    print("=" * 80)
     print("Frame Extraction from Videos")
-    print("="*80)
+    print("=" * 80)
     print(f"Model: {args.model_dir}")
     print(f"Shoot: {args.shoot_dir}")
     print(f"Output: {args.output_dir}")
@@ -427,9 +450,9 @@ def main():
                 total_errors += len(camera_frames[camera_id])
 
     # Summary
-    print(f"\n{'='*80}")
-    print(f"📊 Extraction Summary")
-    print(f"{'='*80}")
+    print(f"\n{'=' * 80}")
+    print("📊 Extraction Summary")
+    print(f"{'=' * 80}")
     print(f"Total frames: {len(image_names)}")
     print(f"Extracted: {total_extracted}")
     print(f"Skipped: {total_skipped}")
@@ -438,10 +461,14 @@ def main():
     # Compute output size
     total_size_mb = sum(f.stat().st_size for f in args.output_dir.rglob("*.jpg")) / (1024**2)
     print(f"Output size: {total_size_mb:.1f} MB")
-    print(f"Average per frame: {total_size_mb / total_extracted:.2f} MB" if total_extracted > 0 else "N/A")
+    print(
+        f"Average per frame: {total_size_mb / total_extracted:.2f} MB"
+        if total_extracted > 0
+        else "N/A"
+    )
 
     if total_extracted == len(image_names):
-        print(f"\n✅ All frames extracted successfully!")
+        print("\n✅ All frames extracted successfully!")
     else:
         print(f"\n⚠️  Warning: {len(image_names) - total_extracted} frames missing!")
 

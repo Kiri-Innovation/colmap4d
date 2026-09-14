@@ -45,34 +45,38 @@ import tempfile
 import time
 from collections import defaultdict
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional
 
 # Add colmap4d package to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from colmap4d import sidecar
-from colmap4d.colmap_io import write_images_bin, write_points3D_bin, Image, Point3D
+import pycolmap
+
+from colmap4d.colmap_io import Image, Point3D, write_images_bin, write_points3D_bin
 from colmap4d.rig_calibration import (
     CalibratedCamera,
     CameraExtrinsics,
     CameraIntrinsics,
     RigCalibration,
 )
-import pycolmap
 
 
 def extract_calibration_frame(video_path: Path, output_path: Path, frame_number: int = 0) -> bool:
     """Extract a single frame from video for calibration."""
     cmd = [
         "ffmpeg",
-        "-i", str(video_path),
-        "-vf", f"select='eq(n\\,{frame_number})'",
-        "-vframes", "1",
-        "-q:v", "2",
+        "-i",
+        str(video_path),
+        "-vf",
+        f"select='eq(n\\,{frame_number})'",
+        "-vframes",
+        "1",
+        "-q:v",
+        "2",
         str(output_path),
         "-y",
         "-hide_banner",
-        "-loglevel", "error",
+        "-loglevel",
+        "error",
     ]
     result = subprocess.run(cmd, capture_output=True)
     return result.returncode == 0 and output_path.exists()
@@ -85,7 +89,7 @@ def calibrate_rig(
     colmap_bin: str,
 ) -> RigCalibration:
     """Run COLMAP calibration on calibration frames."""
-    print(f"  Running COLMAP calibration...")
+    print("  Running COLMAP calibration...")
 
     with tempfile.TemporaryDirectory(prefix="calib_") as tmp_dir:
         work_dir = Path(tmp_dir)
@@ -94,35 +98,59 @@ def calibrate_rig(
         sparse_dir.mkdir(parents=True, exist_ok=True)
 
         # Feature extraction
-        subprocess.run([
-            colmap_bin, "feature_extractor",
-            "--database_path", str(database_path),
-            "--image_path", str(calib_frames_dir),
-            "--ImageReader.single_camera", "1",
-            "--SiftExtraction.max_num_features", "32768",
-        ], capture_output=True, check=True)
+        subprocess.run(
+            [
+                colmap_bin,
+                "feature_extractor",
+                "--database_path",
+                str(database_path),
+                "--image_path",
+                str(calib_frames_dir),
+                "--ImageReader.single_camera",
+                "1",
+                "--SiftExtraction.max_num_features",
+                "32768",
+            ],
+            capture_output=True,
+            check=True,
+        )
 
         # Matching
-        subprocess.run([
-            colmap_bin, "exhaustive_matcher",
-            "--database_path", str(database_path),
-            "--FeatureMatching.guided_matching", "1",
-        ], capture_output=True, check=True)
+        subprocess.run(
+            [
+                colmap_bin,
+                "exhaustive_matcher",
+                "--database_path",
+                str(database_path),
+                "--FeatureMatching.guided_matching",
+                "1",
+            ],
+            capture_output=True,
+            check=True,
+        )
 
         # Reconstruction
-        subprocess.run([
-            colmap_bin, "mapper",
-            "--database_path", str(database_path),
-            "--image_path", str(calib_frames_dir),
-            "--output_path", str(sparse_dir),
-        ], capture_output=True, check=True)
+        subprocess.run(
+            [
+                colmap_bin,
+                "mapper",
+                "--database_path",
+                str(database_path),
+                "--image_path",
+                str(calib_frames_dir),
+                "--output_path",
+                str(sparse_dir),
+            ],
+            capture_output=True,
+            check=True,
+        )
 
         # Load reconstruction
         rec = pycolmap.Reconstruction(sparse_dir / "0")
 
         # Extract camera parameters
         cameras = {}
-        for image_id, image in rec.images.items():
+        for _image_id, image in rec.images.items():
             camera_name = image.name.replace(".jpg", "")
             camera_model = rec.cameras[image.camera_id]
 
@@ -176,6 +204,7 @@ def calibrate_rig(
         }
 
         from datetime import datetime, timezone
+
         calibrated_at = datetime.now(timezone.utc).isoformat()
 
         # Save calibration
@@ -192,7 +221,7 @@ def calibrate_rig(
         return calibration, rec
 
 
-def parse_timestamps(manifest_path: Path, base_dir: Path) -> List[Dict]:
+def parse_timestamps(manifest_path: Path, base_dir: Path) -> list[dict]:
     """Parse timestamps from all camera sidecars."""
     manifest = json.loads(manifest_path.read_text())
     timestamped_images = []
@@ -201,7 +230,7 @@ def parse_timestamps(manifest_path: Path, base_dir: Path) -> List[Dict]:
         cam_name = cam_entry["name"]
         sidecar_path = base_dir / cam_name / cam_entry["sidecar"]
 
-        lines = sidecar_path.read_text().strip().split('\n')
+        lines = sidecar_path.read_text().strip().split("\n")
         header = json.loads(lines[0])
         clock_offset_ms = header.get("clockOffsetMs", 0)
         clock_offset_ns = clock_offset_ms * 1_000_000
@@ -219,11 +248,13 @@ def parse_timestamps(manifest_path: Path, base_dir: Path) -> List[Dict]:
             timestamp_epoch_ns = timestamp_realtime_ns + clock_offset_ns
             timestamp_mid_exposure_ns = timestamp_epoch_ns + exposure_ns // 2
 
-            timestamped_images.append({
-                "camera_name": cam_name,
-                "frame_index": frame_index,
-                "timestamp_ns": timestamp_mid_exposure_ns,
-            })
+            timestamped_images.append(
+                {
+                    "camera_name": cam_name,
+                    "frame_index": frame_index,
+                    "timestamp_ns": timestamp_mid_exposure_ns,
+                }
+            )
 
     return timestamped_images
 
@@ -231,7 +262,7 @@ def parse_timestamps(manifest_path: Path, base_dir: Path) -> List[Dict]:
 def convert_to_colmap4d(
     calibration: RigCalibration,
     reconstruction: pycolmap.Reconstruction,
-    timestamped_images: List[Dict],
+    timestamped_images: list[dict],
     output_dir: Path,
 ) -> None:
     """Convert rig calibration + timestamps to colmap4d format."""
@@ -243,9 +274,12 @@ def convert_to_colmap4d(
         f.write("# Camera list with one line of data per camera:\n")
         f.write("#   CAMERA_ID, MODEL, WIDTH, HEIGHT, PARAMS[]\n")
 
-        for cam_id, (cam_name, cam_data) in enumerate(calibration.cameras.items(), start=1):
+        for cam_id, (_cam_name, cam_data) in enumerate(calibration.cameras.items(), start=1):
             params_str = " ".join(str(p) for p in cam_data.intrinsics.params)
-            f.write(f"{cam_id} {cam_data.intrinsics.model} {cam_data.intrinsics.width} {cam_data.intrinsics.height} {params_str}\n")
+            f.write(
+                f"{cam_id} {cam_data.intrinsics.model} {cam_data.intrinsics.width} "
+                f"{cam_data.intrinsics.height} {params_str}\n"
+            )
 
     # Build camera_name → camera_id map
     camera_name_to_id = {name: idx + 1 for idx, name in enumerate(calibration.cameras.keys())}
@@ -267,7 +301,12 @@ def convert_to_colmap4d(
         name = f"frame_{frame_idx:04d}/{cam_name}.jpg"
 
         # Extract qvec and tvec from extrinsics
-        qvec = [cam_data.extrinsics.qw, cam_data.extrinsics.qx, cam_data.extrinsics.qy, cam_data.extrinsics.qz]
+        qvec = [
+            cam_data.extrinsics.qw,
+            cam_data.extrinsics.qx,
+            cam_data.extrinsics.qy,
+            cam_data.extrinsics.qz,
+        ]
         tvec = [cam_data.extrinsics.tx, cam_data.extrinsics.ty, cam_data.extrinsics.tz]
 
         images[image_id] = Image(
@@ -315,7 +354,10 @@ def convert_to_colmap4d(
         x, y, z = pt.xyz
         r, g, b = pt.rgb
         track_str = ""  # Empty track for static points
-        line = f"{pt_id} {x:.12g} {y:.12g} {z:.12g} {int(r)} {int(g)} {int(b)} {pt.error:.12g} {track_str}\n"
+        line = (
+            f"{pt_id} {x:.12g} {y:.12g} {z:.12g} {int(r)} {int(g)} {int(b)} "
+            f"{pt.error:.12g} {track_str}\n"
+        )
         point_lines.append(line)
     (output_dir / "points3D.txt").write_text("".join(point_lines))
 
@@ -326,12 +368,16 @@ def convert_to_colmap4d(
 
     # Write time_meta.json
     with open(output_dir / "time_meta.json", "w") as f:
-        json.dump({
-            "colmap4d_spec": "1.0",
-            "time_convention": "mid_exposure",
-            "clock_domain": "utc_ntp",
-            "points_t_method": "unbounded_static",
-        }, f, indent=2)
+        json.dump(
+            {
+                "colmap4d_spec": "1.0",
+                "time_convention": "mid_exposure",
+                "clock_domain": "utc_ntp",
+                "points_t_method": "unbounded_static",
+            },
+            f,
+            indent=2,
+        )
 
     print(f"  ✓ Wrote {len(images)} images, {len(points3d)} static points")
 
@@ -342,30 +388,35 @@ def extract_frames(
     output_images_dir: Path,
     resolution: str,
     jpeg_quality: int,
-) -> Dict:
+) -> dict:
     """Extract frames using the corrected timestamp matching script."""
     extract_script = Path(__file__).parent / "extract_frames.py"
 
     cmd = [
         sys.executable,
         str(extract_script),
-        "--model-dir", str(model_dir),
-        "--shoot-dir", str(shoot_dir),
-        "--output-dir", str(output_images_dir),
-        "--resolution", resolution,
-        "--jpeg-quality", str(jpeg_quality),
+        "--model-dir",
+        str(model_dir),
+        "--shoot-dir",
+        str(shoot_dir),
+        "--output-dir",
+        str(output_images_dir),
+        "--resolution",
+        resolution,
+        "--jpeg-quality",
+        str(jpeg_quality),
     ]
 
     result = subprocess.run(cmd, capture_output=True, text=True)
 
     if result.returncode != 0:
-        print(f"  ✗ Frame extraction failed:")
+        print("  ✗ Frame extraction failed:")
         print(result.stderr)
         raise RuntimeError("Frame extraction failed")
 
     # Parse stats from output (look for summary lines)
     stats = {}
-    for line in result.stdout.split('\n'):
+    for line in result.stdout.split("\n"):
         if "Total frames:" in line:
             stats["total"] = int(line.split(":")[-1].strip())
         elif "Extracted:" in line:
@@ -376,7 +427,7 @@ def extract_frames(
     return stats
 
 
-def validate_output(model_dir: Path, images_dir: Path) -> Dict:
+def validate_output(model_dir: Path, images_dir: Path) -> dict:
     """Validate model consistency."""
     # Read images.bin
     with open(model_dir / "images.bin", "rb") as f:
@@ -407,7 +458,7 @@ def validate_output(model_dir: Path, images_dir: Path) -> Dict:
     # Check file existence
     existing = 0
     missing = []
-    for img_id, name in image_data:
+    for _img_id, name in image_data:
         if (images_dir / name).exists():
             existing += 1
         else:
@@ -415,7 +466,7 @@ def validate_output(model_dir: Path, images_dir: Path) -> Dict:
 
     # Per-camera stats
     camera_stats = defaultdict(lambda: {"model": 0, "files": 0})
-    for img_id, name in image_data:
+    for _img_id, name in image_data:
         cam_id = name.split("/")[1].replace(".jpg", "")
         camera_stats[cam_id]["model"] += 1
         if (images_dir / name).exists():
@@ -428,9 +479,9 @@ def validate_output(model_dir: Path, images_dir: Path) -> Dict:
         "missing_files": len(missing),
         "camera_stats": dict(camera_stats),
         "consistent": (
-            len(image_data) == len(times) == existing and
-            len(missing) == 0 and
-            set(times.keys()) == set(img_id for img_id, _ in image_data)
+            len(image_data) == len(times) == existing
+            and len(missing) == 0
+            and set(times.keys()) == set(img_id for img_id, _ in image_data)
         ),
     }
 
@@ -518,7 +569,7 @@ def main():
     if args.rig_calibration and args.rig_calibration.exists():
         existing_calib = RigCalibration.load(args.rig_calibration)
         if existing_calib.rig_id == args.rig_id:
-            print(f"✓ Reusing existing calibration (rig_id matches)")
+            print("✓ Reusing existing calibration (rig_id matches)")
             shutil.copy(args.rig_calibration, calib_json)
             calibration = existing_calib
             reconstruction = None
@@ -526,11 +577,14 @@ def main():
             # Still need calibration frames for 3D points extraction
             need_calibration_frames = True
         else:
-            print(f"⚠️  Existing calibration rig_id mismatch ({existing_calib.rig_id} != {args.rig_id})")
-            print(f"   Will recalibrate")
+            print(
+                "⚠️  Existing calibration rig_id mismatch "
+                f"({existing_calib.rig_id} != {args.rig_id})"
+            )
+            print("   Will recalibrate")
 
     if need_calibration_frames:
-        print(f"\n1️⃣  Extracting calibration frames...")
+        print("\n1️⃣  Extracting calibration frames...")
         calib_frames_dir.mkdir(parents=True, exist_ok=True)
 
         for cam_entry in manifest["cameras"]:
@@ -549,7 +603,7 @@ def main():
 
     # Step 2: Calibrate rig (only if not reusing)
     if not reused_calibration:
-        print(f"\n2️⃣  Calibrating rig...")
+        print("\n2️⃣  Calibrating rig...")
         calibration, reconstruction = calibrate_rig(
             calib_frames_dir,
             calib_json,
@@ -558,51 +612,75 @@ def main():
         )
 
     # Step 3: Parse timestamps
-    print(f"\n3️⃣  Parsing timestamps...")
+    print("\n3️⃣  Parsing timestamps...")
     timestamped_images = parse_timestamps(manifest_path, args.shoot_dir)
     print(f"  ✓ Parsed {len(timestamped_images)} timestamped images")
 
     # Step 4: Convert to colmap4d
-    print(f"\n4️⃣  Converting to colmap4d...")
+    print("\n4️⃣  Converting to colmap4d...")
     model_dir = args.output_dir / "colmap4d_output"
 
     # If we reused calibration, we need to load the reconstruction for points
     if reused_calibration:
         # Run a quick reconstruction just to get 3D points
-        print(f"  Re-running calibration to extract 3D points...")
+        print("  Re-running calibration to extract 3D points...")
         with tempfile.TemporaryDirectory(prefix="recon_") as tmp_dir:
             work_dir = Path(tmp_dir)
             database_path = work_dir / "database.db"
             sparse_dir = work_dir / "sparse"
             sparse_dir.mkdir(parents=True, exist_ok=True)
 
-            subprocess.run([
-                args.colmap, "feature_extractor",
-                "--database_path", str(database_path),
-                "--image_path", str(calib_frames_dir),
-                "--ImageReader.single_camera", "1",
-                "--SiftExtraction.max_num_features", "32768",
-            ], capture_output=True, check=True)
+            subprocess.run(
+                [
+                    args.colmap,
+                    "feature_extractor",
+                    "--database_path",
+                    str(database_path),
+                    "--image_path",
+                    str(calib_frames_dir),
+                    "--ImageReader.single_camera",
+                    "1",
+                    "--SiftExtraction.max_num_features",
+                    "32768",
+                ],
+                capture_output=True,
+                check=True,
+            )
 
-            subprocess.run([
-                args.colmap, "exhaustive_matcher",
-                "--database_path", str(database_path),
-                "--FeatureMatching.guided_matching", "1",
-            ], capture_output=True, check=True)
+            subprocess.run(
+                [
+                    args.colmap,
+                    "exhaustive_matcher",
+                    "--database_path",
+                    str(database_path),
+                    "--FeatureMatching.guided_matching",
+                    "1",
+                ],
+                capture_output=True,
+                check=True,
+            )
 
-            subprocess.run([
-                args.colmap, "mapper",
-                "--database_path", str(database_path),
-                "--image_path", str(calib_frames_dir),
-                "--output_path", str(sparse_dir),
-            ], capture_output=True, check=True)
+            subprocess.run(
+                [
+                    args.colmap,
+                    "mapper",
+                    "--database_path",
+                    str(database_path),
+                    "--image_path",
+                    str(calib_frames_dir),
+                    "--output_path",
+                    str(sparse_dir),
+                ],
+                capture_output=True,
+                check=True,
+            )
 
             reconstruction = pycolmap.Reconstruction(sparse_dir / "0")
 
     convert_to_colmap4d(calibration, reconstruction, timestamped_images, model_dir)
 
     # Step 5: Extract frames
-    print(f"\n5️⃣  Extracting frames (timestamp matching with offset correction)...")
+    print("\n5️⃣  Extracting frames (timestamp matching with offset correction)...")
     images_dir = model_dir / "images"
     extract_stats = extract_frames(
         model_dir,
@@ -635,13 +713,13 @@ def main():
         rebuilt_dir.rmdir()
 
     # Step 6: Validate
-    print(f"\n6️⃣  Validating output...")
+    print("\n6️⃣  Validating output...")
     validation = validate_output(model_dir, images_dir)
 
     if validation["consistent"]:
-        print(f"  ✅ Model is fully consistent")
+        print("  ✅ Model is fully consistent")
     else:
-        print(f"  ⚠️  Consistency issues detected")
+        print("  ⚠️  Consistency issues detected")
 
     print(f"     Model images: {validation['model_images']}")
     print(f"     times.txt entries: {validation['times_entries']}")
@@ -665,27 +743,27 @@ def main():
         f.write("## Per-Camera Stats\n\n")
         f.write("| Camera | Model | Files |\n")
         f.write("|--------|-------|-------|\n")
-        for cam_id in sorted(validation['camera_stats'].keys()):
-            stats = validation['camera_stats'][cam_id]
+        for cam_id in sorted(validation["camera_stats"].keys()):
+            stats = validation["camera_stats"][cam_id]
             f.write(f"| {cam_id[:8]} | {stats['model']} | {stats['files']} |\n")
         f.write("\n## Output Structure\n\n")
         f.write("```\n")
         f.write(f"{args.output_dir.name}/\n")
-        f.write(f"├── rig_calibration.json\n")
-        f.write(f"├── calibration_frames/\n")
-        f.write(f"├── colmap4d_output/\n")
-        f.write(f"│   ├── cameras.txt\n")
-        f.write(f"│   ├── images.bin\n")
-        f.write(f"│   ├── points3D.bin\n")
-        f.write(f"│   ├── points3D.txt\n")
-        f.write(f"│   ├── times.txt\n")
-        f.write(f"│   ├── points_t.txt\n")
-        f.write(f"│   ├── time_meta.json\n")
-        f.write(f"│   └── images/\n")
-        f.write(f"│       ├── frame_0000/\n")
-        f.write(f"│       ├── frame_0001/\n")
-        f.write(f"│       └── ...\n")
-        f.write(f"└── PIPELINE_REPORT.md\n")
+        f.write("├── rig_calibration.json\n")
+        f.write("├── calibration_frames/\n")
+        f.write("├── colmap4d_output/\n")
+        f.write("│   ├── cameras.txt\n")
+        f.write("│   ├── images.bin\n")
+        f.write("│   ├── points3D.bin\n")
+        f.write("│   ├── points3D.txt\n")
+        f.write("│   ├── times.txt\n")
+        f.write("│   ├── points_t.txt\n")
+        f.write("│   ├── time_meta.json\n")
+        f.write("│   └── images/\n")
+        f.write("│       ├── frame_0000/\n")
+        f.write("│       ├── frame_0001/\n")
+        f.write("│       └── ...\n")
+        f.write("└── PIPELINE_REPORT.md\n")
         f.write("```\n")
 
     print(f"\n{'=' * 80}")

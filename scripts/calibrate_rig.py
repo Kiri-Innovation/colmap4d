@@ -146,7 +146,7 @@ def extract_calibration(
     cameras = {}
 
     # Extract camera parameters
-    for img_id, img in reconstruction.images.items():
+    for _img_id, img in reconstruction.images.items():
         cam = reconstruction.cameras[img.camera_id]
 
         # Get camera name from image filename (e.g., "cam1.png" -> "cam1")
@@ -230,9 +230,9 @@ def calibrate_rig(
     Returns:
         RigCalibration object
     """
-    print(f"\n{'='*80}")
-    print(f"Fixed Camera Rig Calibration")
-    print(f"{'='*80}")
+    print(f"\n{'=' * 80}")
+    print("Fixed Camera Rig Calibration")
+    print(f"{'=' * 80}")
     print(f"Rig ID: {rig_id}")
     print(f"Images: {len(image_paths)}")
     print(f"Output: {output_path}")
@@ -245,7 +245,7 @@ def calibrate_rig(
         # Run COLMAP SfM
         reconstruction = run_colmap_sfm(image_paths, colmap_bin, work_dir)
 
-        print(f"\n✅ SfM reconstruction successful!")
+        print("\n✅ SfM reconstruction successful!")
         print(f"   Registered images: {reconstruction.num_reg_images()}")
         print(f"   3D points: {len(reconstruction.points3D)}")
 
@@ -253,10 +253,10 @@ def calibrate_rig(
         calibration = extract_calibration(reconstruction, rig_id, notes)
 
     # Validate
-    print(f"\n🔍 Validating calibration...")
+    print("\n🔍 Validating calibration...")
     errors = validate_rig_calibration(calibration)
     if errors:
-        print(f"⚠️  Validation warnings:")
+        print("⚠️  Validation warnings:")
         for err in errors:
             print(f"   - {err}")
 
@@ -265,15 +265,17 @@ def calibrate_rig(
     print(f"\n💾 Calibration saved to: {output_path}")
 
     # Print summary
-    print(f"\n📊 Calibration Summary:")
+    print("\n📊 Calibration Summary:")
     print(f"   Rig ID: {calibration.rig_id}")
     print(f"   Calibrated at: {calibration.calibrated_at}")
     print(f"   Cameras: {len(calibration.cameras)}")
     for name, cam in sorted(calibration.cameras.items()):
         fx = cam.intrinsics.params[0]
-        print(f"      {name}: {cam.intrinsics.model}, fx={fx:.1f}px, "
-              f"{cam.num_3d_points_visible} visible points")
-    print(f"   Quality:")
+        print(
+            f"      {name}: {cam.intrinsics.model}, fx={fx:.1f}px, "
+            f"{cam.num_3d_points_visible} visible points"
+        )
+    print("   Quality:")
     print(f"      Mean reprojection error: {calibration.quality['mean_reproj_error_px']:.4f}px")
     print(f"      3D points: {calibration.quality['num_3d_points']}")
     print(f"      Mean track length: {calibration.quality['mean_track_length']:.2f}")
@@ -292,12 +294,8 @@ def main():
         required=True,
         help="Calibration images (one per camera, same time instant)",
     )
-    parser.add_argument(
-        "--rig-id", required=True, help="Unique identifier for this rig"
-    )
-    parser.add_argument(
-        "--output", required=True, help="Output path for calibration JSON"
-    )
+    parser.add_argument("--rig-id", required=True, help="Unique identifier for this rig")
+    parser.add_argument("--output", required=True, help="Output path for calibration JSON")
     parser.add_argument(
         "--colmap", default="colmap", help="Path to COLMAP binary (default: 'colmap')"
     )
@@ -326,6 +324,7 @@ def main():
     except Exception as e:
         print(f"\n❌ Calibration failed: {e}", file=sys.stderr)
         import traceback
+
         traceback.print_exc()
         sys.exit(1)
 
