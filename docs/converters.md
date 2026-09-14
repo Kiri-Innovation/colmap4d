@@ -40,6 +40,97 @@ Notes:
 
 A `colmap4d convert` **command-line interface is not built yet** — use the Python API above.
 
+### fixed-rig multi-camera → colmap4d — **Python API + tools (implemented)**
+
+Convert synchronized multi-camera video captures from a fixed rig (intrinsics + extrinsics
+pre-calibrated, poses reused across all frames) into colmap4d.
+
+**Pipeline:**
+
+1. **Calibrate the rig** (once per physical setup):
+
+   ```bash
+   python scripts/calibrate_rig.py \
+       --images calib_frames/*.jpg \
+       --rig-id "studio-rig-01" \
+       --output rig_calibration.json \
+       --colmap /path/to/colmap
+   ```
+
+   Input: N calibration images (one per camera, same instant, wide baseline recommended).  
+   Output: `rig_calibration.json` with intrinsics + extrinsics for each camera.
+
+   Key parameters for challenging multi-camera arrays:
+   - `--ImageReader.single_camera 1` (shared intrinsics across cameras)
+   - `--FeatureMatching.guided_matching 1` (helps isolated cameras register)
+   - `--SiftExtraction.max_num_features 32768` (denser features for sparse overlap)
+
+2. **Convert videos + timestamps to colmap4d**:
+
+   ```python
+   from colmap4d.convert.fixed_rig import convert_fixed_rig_to_colmap4d, TimestampedImage
+
+   # Parse timestamps from sidecars (per-camera frame metadata)
+   images = [
+       TimestampedImage(
+           camera_name="cam0",
+           frame_index=0,
+           timestamp_ns=1234567890000000,
+       ),
+       # ... for each frame from each camera
+   ]
+
+   convert_fixed_rig_to_colmap4d(
+       calibration_path="rig_calibration.json",
+       images=images,
+       output_dir="out/sparse",
+       clock_domain="utc_ntp",
+   )
+   ```
+
+   This writes the sparse model (images.bin, cameras.txt, empty points3D.txt by default) +
+   sidecars (times.txt, time_meta.json).
+
+3. **Extract video frames to match model NAMEs**:
+
+   ```bash
+   python scripts/extract_frames.py \
+       --model-dir out/sparse \
+       --shoot-dir /path/to/shoot_dir \
+       --output-dir out/sparse/images \
+       --resolution 1920x1440 \
+       --jpeg-quality 85
+   ```
+
+   Reads `images.bin` to get required image NAMEs (like `frame_0007/cam0.jpg`), extracts
+   corresponding frames from `<shoot_dir>/<cam_id>/video.mp4` using **timestamp matching** with
+   offset correction, and writes resized JPEGs to the output directory.
+
+   The tool:
+   - Reads actual PTS timestamps from video frames
+   - Estimates per-camera systematic timing offsets
+   - Matches sidecar timestamps to video frames (threshold: 5ms)
+   - Only extracts frames with successful matches (<1ms typical error)
+   - Rebuilds the model to ensure strict 1:1 correspondence (images ↔ times.txt)
+   - Reports per-camera match statistics and unmatched frame reasons
+
+   Handles edge cases:
+   - Encoder-dropped frames (sidecar records more frames than video contains)
+   - Per-camera systematic timing offsets (encoder processing delays)
+   - Cameras starting at different `frameIndex` values
+   - Parallel extraction (4 cameras by default) for efficiency
+
+**Notes:**
+
+- **Static points:** If 3D points are triangulated from calibration frames and represent static
+  structure, they should be marked as **temporally-unbounded** (omit from `points_t.txt` or write
+  empty file) so they're visible at all time steps in viewers. This matches spec I.A semantics.
+- **Frame mapping:** Uses timestamp matching, NOT index mapping. Sidecar records all sensor frames;
+  video only contains encoded frames. The tool matches by absolute time (firstTimestampNs anchor)
+  and skips unmatched frames rather than risk incorrect associations.
+- **Data quality:** The rebuilt model is guaranteed consistent — every image in `images.bin` has a
+  corresponding file and `times.txt` entry. Typical match rate: 95-96% (4-5% lost to encoder drops).
+
 ## Planned
 
 Not yet implemented (contributions welcome, via the Tier-1 flow in
