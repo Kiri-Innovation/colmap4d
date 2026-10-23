@@ -7,6 +7,7 @@ dependency, not implemented yet).
 
 from __future__ import annotations
 
+from colmap4d.groups import GridDiscard, GridGroup, GridGrouping, GridSample, group_by_grid
 from colmap4d.model import (
     ModelView,
     load_model_view,
@@ -31,13 +32,18 @@ from colmap4d.sidecar import (
     write_times_txt,
 )
 
-__version__ = "1.0.1"
+__version__ = "1.0.2"
 
 __all__ = [
     "TIMELESS",
+    "GridDiscard",
+    "GridGroup",
+    "GridGrouping",
+    "GridSample",
     "ModelView",
     "Sidecars",
     "is_temporally_unbounded",
+    "group_by_grid",
     "load_model_view",
     "load_sidecars",
     "read_base_model",
