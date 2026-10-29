@@ -13,6 +13,9 @@ venv/
 .ruff_cache/
 .mypy_cache/
 
+# Flops / agent session logs
+.flops/
+
 # OS / editor
 .DS_Store
 *.swp
