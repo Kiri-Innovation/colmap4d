@@ -57,6 +57,25 @@ the backward-compatibility baseline. The reader is standard-library only; `pip i
 Uploading time to a GPU (4DGS/NeRF)? Rebase first — raw epoch ns overflows float32; upload
 `(t − t0)` seconds as float32 via `colmap4d.rebase_to_seconds_f32(t, mv.t0_ns())`.
 
+## Optional array readers (1.0.4)
+
+Install `colmap4d[arrays]` to read points as NumPy arrays without constructing
+one Python object per point:
+
+```python
+from colmap4d.arrays import read_point_arrays, read_image_headers
+
+ids, xyz, rgb = read_point_arrays("sparse/0/points3D.bin")
+images = read_image_headers("sparse/0/images.bin")
+```
+
+XYZ retains float64 storage precision, RGB is uint8, and IDs are sorted with
+last-record-wins duplicate handling. Tracks are bounds-checked but not decoded.
+Uniform-track binary files use validated strided views; other files use an
+offset scan. The image reader seeks over observations instead of reading their
+payload. These are optional compute APIs, not a new file format or a change to
+timestamp/validation semantics. The core package remains dependency-free.
+
 ## License
 
 [Apache-2.0](https://github.com/Kiri-Innovation/colmap4d/blob/main/LICENSE).
