@@ -25,9 +25,17 @@ from colmap4d.colmap_io import BaseModel
 from colmap4d.sidecar import TIMELESS, Sidecars
 
 
-def read_base_model(model_dir: str | Path) -> BaseModel:
-    """Read the COLMAP base model with the zero-dependency pure-Python reader."""
-    return colmap_io.read_model(model_dir)
+def read_base_model(
+    model_dir: str | Path, *, include_observations: bool = True, include_tracks: bool = True
+) -> BaseModel:
+    """Read the COLMAP base model with the zero-dependency pure-Python reader.
+
+    Pass ``include_observations=False`` / ``include_tracks=False`` to skip the 2D observations /
+    point tracks when only poses, point positions and ids are needed (see
+    :func:`colmap4d.colmap_io.read_model`)."""
+    return colmap_io.read_model(
+        model_dir, include_observations=include_observations, include_tracks=include_tracks
+    )
 
 
 def read_reconstruction(model_dir: str | Path) -> Any:
@@ -97,15 +105,29 @@ class ModelView:
         return min(vals) if vals else None
 
 
-def load_model_view(model_dir: str | Path, strict: bool = False) -> ModelView:
-    """Read the COLMAP model (zero-dep) + sidecars and return a joined :class:`ModelView`."""
-    base = read_base_model(model_dir)
+def load_model_view(
+    model_dir: str | Path,
+    strict: bool = False,
+    *,
+    include_observations: bool = True,
+    include_tracks: bool = True,
+) -> ModelView:
+    """Read the COLMAP model (zero-dep) + sidecars and return a joined :class:`ModelView`.
+
+    ``include_observations`` / ``include_tracks`` are forwarded to :func:`read_base_model`."""
+    base = read_base_model(
+        model_dir, include_observations=include_observations, include_tracks=include_tracks
+    )
     sc = sidecar.load_sidecars(model_dir, strict=strict)
     return ModelView(base, sc)
 
 
 def validate_full(model_dir: str | Path) -> list[validate.Problem]:
     """Run the complete validate suite, wiring the model's id sets (read zero-dep) so the
-    dangling-id checks (Part I.D) actually fire. Compute status with ``validate.exit_code``."""
-    base = read_base_model(model_dir)
+    dangling-id checks (Part I.D) actually fire. Compute status with ``validate.exit_code``.
+
+    Only the id sets are needed, so observations and tracks are not read. A caller that
+    already holds a :class:`ModelView` can call ``validate.validate`` with its id sets instead
+    of re-reading the model."""
+    base = read_base_model(model_dir, include_observations=False, include_tracks=False)
     return validate.validate(model_dir, image_ids=base.image_ids(), point_ids=base.point_ids())

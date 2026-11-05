@@ -12,11 +12,20 @@ Binary layout follows COLMAP's ``reconstruction_io`` (little-endian, count-prefi
                    name\\0, u64 n2d, [f64 x, f64 y, u64 point3D_id] * n2d]
     points3D.bin : u64 count, then [u64 id, f64 x y z, u8 r g b, f64 error,
                    u64 track_len, [u32 image_id, u32 point2D_idx] * track_len]
+
+The binary readers decode each file from one in-memory buffer, slicing the fixed-size runs
+(2D observations, tracks) in bulk instead of one ``struct`` call per element. Callers that only
+need poses / point positions can skip the per-observation data with ``include_observations`` /
+``include_tracks``; the skipped fields are then ``None`` rather than lists.
 """
 
 from __future__ import annotations
 
+import gc
 import struct
+import sys
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -57,8 +66,9 @@ class Image:
     camera_id: int
     qvec: list[float]  # [qw, qx, qy, qz]
     tvec: list[float]  # [tx, ty, tz]
-    xys: list[tuple[float, float]] = field(default_factory=list)
-    point3D_ids: list[int] = field(default_factory=list)  # INVALID_POINT3D_ID where none
+    # Both are None when read with include_observations=False.
+    xys: list[tuple[float, float]] | None = field(default_factory=list)
+    point3D_ids: list[int] | None = field(default_factory=list)  # INVALID_POINT3D_ID where none
 
 
 @dataclass
@@ -67,7 +77,7 @@ class Point3D:
     xyz: list[float]
     rgb: list[int]
     error: float
-    track: list[tuple[int, int]]  # (image_id, point2D_idx)
+    track: list[tuple[int, int]] | None  # (image_id, point2D_idx); None if not read
 
 
 @dataclass
@@ -93,6 +103,53 @@ def _r(f, fmt: str):
 
 def _w(f, fmt: str, *vals) -> None:
     f.write(struct.pack("<" + fmt, *vals))
+
+
+_U64 = struct.Struct("<Q")
+_IMAGE_HEAD = struct.Struct("<IdddddddI")
+_OBSERVATION = struct.Struct("<ddQ")
+_POINT_HEAD = struct.Struct("<QdddBBBdQ")
+_TRACK_ELEM = struct.Struct("<II")
+# memoryview.cast decodes in native byte order, which matches the file only on little-endian.
+_NATIVE_LITTLE_ENDIAN = sys.byteorder == "little"
+
+
+@contextmanager
+def _gc_paused() -> Iterator[None]:
+    """Pause the cyclic GC while building millions of acyclic records; repeated collections
+    over the growing heap otherwise cost more than the parsing itself."""
+    was_enabled = gc.isenabled()
+    gc.disable()
+    try:
+        yield
+    finally:
+        if was_enabled:
+            gc.enable()
+
+
+def _span(data: bytes, off: int, size: int) -> int:
+    """End offset of ``size`` bytes at ``off``; raise like a short ``struct`` read if past EOF."""
+    end = off + size
+    if end > len(data):
+        raise struct.error(f"unpack requires a buffer of {size} bytes")
+    return end
+
+
+def _observations(mv: memoryview, off: int, n2d: int) -> tuple[list, list]:
+    """``(xys, point3D_ids)`` from ``n2d`` packed ``[f64 x, f64 y, u64 id]`` records."""
+    block = mv[off : off + n2d * _OBSERVATION.size]
+    if _NATIVE_LITTLE_ENDIAN:
+        coords = block.cast("d")
+        xys = list(zip(coords[0::3].tolist(), coords[1::3].tolist()))
+        return xys, block.cast("Q")[2::3].tolist()
+    rows = list(_OBSERVATION.iter_unpack(block))
+    return [(x, y) for x, y, _ in rows], [pid for _, _, pid in rows]
+
+
+def _require_loaded(value, what: str, record_id: int):
+    if value is None:
+        raise ValueError(f"{what} {record_id} was read without that data; cannot write it")
+    return value
 
 
 # --------------------------------------------------------------------------- #
@@ -144,7 +201,7 @@ def write_cameras_bin(path: str | Path, cams: dict[int, Camera]) -> None:
 # --------------------------------------------------------------------------- #
 # images
 # --------------------------------------------------------------------------- #
-def read_images_txt(path: str | Path) -> dict[int, Image]:
+def read_images_txt(path: str | Path, *, include_observations: bool = True) -> dict[int, Image]:
     lines = _data_lines(path)
     images = {}
     for i in range(0, len(lines), 2):
@@ -154,6 +211,9 @@ def read_images_txt(path: str | Path) -> dict[int, Image]:
         tvec = [float(x) for x in head[5:8]]
         cam_id = int(head[8])
         name = head[9]
+        if not include_observations:
+            images[iid] = Image(iid, name, cam_id, qvec, tvec, None, None)
+            continue
         xys, ids = [], []
         pts = lines[i + 1].split() if i + 1 < len(lines) else []
         for j in range(0, len(pts), 3):
@@ -164,24 +224,29 @@ def read_images_txt(path: str | Path) -> dict[int, Image]:
     return images
 
 
-def read_images_bin(path: str | Path) -> dict[int, Image]:
+def read_images_bin(path: str | Path, *, include_observations: bool = True) -> dict[int, Image]:
+    """Read images.bin. With ``include_observations=False`` the 2D observations are skipped
+    and ``xys`` / ``point3D_ids`` are ``None``."""
+    data = Path(path).read_bytes()
+    mv = memoryview(data)
     images = {}
-    with open(path, "rb") as f:
-        (n,) = _r(f, "Q")
+    (n,) = _U64.unpack_from(data, 0)
+    off = _U64.size
+    with _gc_paused():
         for _ in range(n):
-            iid, qw, qx, qy, qz, tx, ty, tz, cam_id = _r(f, "IdddddddI")
-            name = bytearray()
-            while (ch := f.read(1)) not in (b"\x00", b""):
-                name += ch
-            (n2d,) = _r(f, "Q")
-            xys, ids = [], []
-            for _ in range(n2d):
-                x, y, pid = _r(f, "ddQ")
-                xys.append((x, y))
-                ids.append(pid)
-            images[iid] = Image(
-                iid, name.decode("utf-8"), cam_id, [qw, qx, qy, qz], [tx, ty, tz], xys, ids
-            )
+            iid, qw, qx, qy, qz, tx, ty, tz, cam_id = _IMAGE_HEAD.unpack_from(data, off)
+            off += _IMAGE_HEAD.size
+            name_end = data.find(b"\x00", off)
+            if name_end < 0:
+                name_end = len(data)
+            name = data[off:name_end].decode("utf-8")
+            off = name_end + 1
+            (n2d,) = _U64.unpack_from(data, off)
+            off += _U64.size
+            end = _span(data, off, n2d * _OBSERVATION.size)
+            xys, ids = _observations(mv, off, n2d) if include_observations else (None, None)
+            off = end
+            images[iid] = Image(iid, name, cam_id, [qw, qx, qy, qz], [tx, ty, tz], xys, ids)
     return images
 
 
@@ -193,15 +258,16 @@ def write_images_bin(path: str | Path, images: dict[int, Image]) -> None:
             _w(f, "Iddddddd", iid, *im.qvec, *im.tvec)
             _w(f, "I", im.camera_id)
             f.write(im.name.encode("utf-8") + b"\x00")
-            _w(f, "Q", len(im.xys))
-            for (x, y), pid in zip(im.xys, im.point3D_ids):
+            xys = _require_loaded(im.xys, "image", iid)
+            _w(f, "Q", len(xys))
+            for (x, y), pid in zip(xys, im.point3D_ids):
                 _w(f, "ddQ", x, y, pid)
 
 
 # --------------------------------------------------------------------------- #
 # points3D
 # --------------------------------------------------------------------------- #
-def read_points3D_txt(path: str | Path) -> dict[int, Point3D]:
+def read_points3D_txt(path: str | Path, *, include_tracks: bool = True) -> dict[int, Point3D]:
     pts = {}
     for line in _data_lines(path):
         p = line.split()
@@ -210,18 +276,36 @@ def read_points3D_txt(path: str | Path) -> dict[int, Point3D]:
         rgb = [int(x) for x in p[4:7]]
         error = float(p[7])
         rest = p[8:]
-        track = [(int(rest[k]), int(rest[k + 1])) for k in range(0, len(rest), 2)]
+        track = (
+            [(int(rest[k]), int(rest[k + 1])) for k in range(0, len(rest), 2)]
+            if include_tracks
+            else None
+        )
         pts[pid] = Point3D(pid, xyz, rgb, error, track)
     return pts
 
 
-def read_points3D_bin(path: str | Path) -> dict[int, Point3D]:
+def read_points3D_bin(path: str | Path, *, include_tracks: bool = True) -> dict[int, Point3D]:
+    """Read points3D.bin. With ``include_tracks=False`` the tracks are skipped and
+    ``track`` is ``None``."""
+    data = Path(path).read_bytes()
+    mv = memoryview(data)
+    head = _POINT_HEAD.unpack_from
+    head_size = _POINT_HEAD.size
+    track_rows = _TRACK_ELEM.iter_unpack
+    size = len(data)
     pts = {}
-    with open(path, "rb") as f:
-        (n,) = _r(f, "Q")
+    (n,) = _U64.unpack_from(data, 0)
+    off = _U64.size
+    with _gc_paused():
         for _ in range(n):
-            pid, x, y, z, r, g, b, error, tl = _r(f, "QdddBBBdQ")
-            track = [tuple(_r(f, "II")) for _ in range(tl)]
+            pid, x, y, z, r, g, b, error, tl = head(data, off)
+            off += head_size
+            end = off + tl * 8  # u32 image_id + u32 point2D_idx; inline: hot loop
+            if end > size:
+                _span(data, off, tl * 8)
+            track = list(track_rows(mv[off:end])) if include_tracks else None
+            off = end
             pts[pid] = Point3D(pid, [x, y, z], [r, g, b], error, track)
     return pts
 
@@ -231,17 +315,24 @@ def write_points3D_bin(path: str | Path, pts: dict[int, Point3D]) -> None:
         _w(f, "Q", len(pts))
         for pid in sorted(pts):
             p = pts[pid]
-            _w(f, "QdddBBBdQ", pid, *p.xyz, *p.rgb, p.error, len(p.track))
-            for img_id, idx in p.track:
+            track = _require_loaded(p.track, "point3D", pid)
+            _w(f, "QdddBBBdQ", pid, *p.xyz, *p.rgb, p.error, len(track))
+            for img_id, idx in track:
                 _w(f, "II", img_id, idx)
 
 
 # --------------------------------------------------------------------------- #
 # whole model
 # --------------------------------------------------------------------------- #
-def read_model(model_dir: str | Path) -> BaseModel:
+def read_model(
+    model_dir: str | Path, *, include_observations: bool = True, include_tracks: bool = True
+) -> BaseModel:
     """Read cameras/images/points3D from a COLMAP model dir. Binary is preferred over text
-    when both are present (matching COLMAP)."""
+    when both are present (matching COLMAP).
+
+    ``include_observations=False`` skips the per-image 2D observations and
+    ``include_tracks=False`` the per-point tracks (those fields are then ``None``); use them
+    when only poses, point positions and ids are needed — they dominate time and memory."""
     d = Path(model_dir)
 
     def pick(stem: str):
@@ -254,8 +345,10 @@ def read_model(model_dir: str | Path) -> BaseModel:
     cpath, ck = pick("cameras")
     ipath, ik = pick("images")
     ppath, pk = pick("points3D")
+    read_images = read_images_bin if ik == "bin" else read_images_txt
+    read_points = read_points3D_bin if pk == "bin" else read_points3D_txt
     return BaseModel(
         cameras=read_cameras_bin(cpath) if ck == "bin" else read_cameras_txt(cpath),
-        images=read_images_bin(ipath) if ik == "bin" else read_images_txt(ipath),
-        points3D=read_points3D_bin(ppath) if pk == "bin" else read_points3D_txt(ppath),
+        images=read_images(ipath, include_observations=include_observations),
+        points3D=read_points(ppath, include_tracks=include_tracks),
     )
