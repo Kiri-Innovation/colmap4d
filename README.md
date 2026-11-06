@@ -81,3 +81,49 @@ timestamp/validation semantics. The core package remains dependency-free.
 [Apache-2.0](https://github.com/Kiri-Innovation/colmap4d/blob/main/LICENSE).
 
 <!-- link-audit: all README external links verified absolute (2026-09-04, PyPI render safety) -->
+
+
+## On-demand preview access (1.0.5)
+
+`colmap4d.preview` is a standard-library-only, read-only API. It accepts a bundle
+root, a sparse directory, or a split cameras/points component directory. It has
+no HTTP or application dependency and does not change existing model/array APIs.
+
+```python
+from colmap4d.preview import (
+    inspect_components, read_camera_page, read_point_page, sample_points, preview_files,
+)
+
+sizes = inspect_components("/data/model")  # stats only; includes all images/ files
+cameras = read_camera_page("/data/model", offset=0, limit=128)
+page = read_point_page("/data/model", offset=1000, limit=1024)
+sample = sample_points("/data/model", budget=200_000)
+# sample.points: bounded list of Point3D, with track=None
+# sample.times: selected ID -> exact int64 ns; missing means temporally unbounded
+files = preview_files("/data/model", part="points", budget=200_000)
+# files.files: dict[str, bytes] of ordinary COLMAP tables + selected time sidecar
+```
+
+Cameras and points can be read independently. Poses omit 2D observations; point
+batches omit tracks. Uniform sampling selects evenly spaced **source row ranks**
+(including both endpoints; a budget of one selects the middle row), preserving
+source order and original integer IDs/timestamps. At most the requested number
+of geometries is decoded. Unordered/duplicate timestamp rows join by ID, last wins.
+Preview files are display subsets, not reconstruction exports. All source files
+remain untouched. Missing sidecars remain empty/timeless; this API does not
+synthesize timestamps.
+
+There is no persistent index: variable-length BIN records require walking preceding
+track-count headers, so deep pages cost O(offset + limit) header reads and a sample
+costs O(source rows) header reads. Track payloads are skipped with seek. TXT uses a
+count pass and a selection pass. Timestamp sidecars are streamed in bounded chunks
+and only selected IDs are retained. Memory scales with the selected batch and
+intrinsics, not the source point/track count; no whole-file mmap/read is used.
+Partial reads are not full-model validation. Use the existing validation API when
+validating a reconstruction, including unselected records.
+
+`ComponentSizes` reports source bytes (not decoded RAM or preview transfer bytes),
+separating cameras/poses, pixel files, point geometry, and point timestamps. Pixel
+symlinks or stat errors produce `images_bytes=None` with `image_size_error`, allowing
+applications to ask before downloading an unknown amount. Pagination returns a
+source-row `next_offset`; sampled batches have no continuation cursor.
