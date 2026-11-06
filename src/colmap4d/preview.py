@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import math
+import random
 import struct
 from dataclasses import dataclass
 from pathlib import Path
@@ -372,22 +373,29 @@ def read_point_page(path: str | Path, *, offset: int = 0, limit: int = 200_000) 
     return _point_batch(path, offset, lambda n: list(range(min(offset, n), min(offset + limit, n))))
 
 
-def sample_points(path: str | Path, *, budget: int = 200_000) -> PointBatch:
-    """Uniform deterministic source-row sample of at most ``budget`` points.
+def sample_points(path: str | Path, *, budget: int = 200_000, seed: int = 0) -> PointBatch:
+    """Stratified jitter sample of exactly ``min(total, budget)`` source rows.
 
-    Evenly spaced integer ranks include both endpoints (one sample uses the
-    middle row). Only chosen geometry is decoded; track payloads are never
-    parsed. BIN walks record headers with bounded buffering; TXT makes two streaming passes.
-    Point timestamps are ID-joined in bounded memory, including unordered and
-    duplicate time rows (last wins). No assumption of fixed track lengths.
+    Divide row order into disjoint integer strata and choose one row uniformly
+    inside each stratum, independently. This breaks fixed-stride aliasing without
+    count fluctuations, duplicate rows, or forced endpoints. Small models keep
+    all rows. Unequal stratum widths differ by at most one row; this is stratified
+    coverage, not an independent equal-probability Bernoulli sample of all rows.
+
+    A fresh local Random(seed) makes repeated calls reproducible in the same
+    Python runtime without touching global RNG state. Only selected geometry is
+    decoded; tracks are skipped. Timestamp joining and pagination are unchanged.
     """
     _bounds(0, budget)
+    if not isinstance(seed, int) or isinstance(seed, bool):
+        raise ValueError("seed must be an integer")
 
     def indices(n):
         take = min(n, budget)
-        if take == 1:
-            return [n // 2]
-        return [i * (n - 1) // (take - 1) for i in range(take)]
+        if take == n:
+            return list(range(n))
+        rng = random.Random(seed)
+        return [rng.randrange(i * n // take, (i + 1) * n // take) for i in range(take)]
 
     batch = _point_batch(path, 0, indices)
     batch.next_offset = None
@@ -435,17 +443,18 @@ def preview_files(
     *,
     part: Literal["cameras", "points"],
     budget: int = 200_000,
+    seed: int = 0,
     offset: int = 0,
     limit: int | None = None,
 ) -> PreviewFiles:
     """Encode only the requested component as a bounded ordinary COLMAP fileset.
 
-    Points default to uniform sampling; supplying ``limit`` selects consecutive
+    Points default to seeded stratified jitter; supplying ``limit`` selects consecutive
     pagination instead. Cameras default to a 100,000-pose page. No source writes.
     """
     if part == "points":
         batch = (
-            sample_points(path, budget=budget)
+            sample_points(path, budget=budget, seed=seed)
             if limit is None
             else read_point_page(path, offset=offset, limit=limit)
         )

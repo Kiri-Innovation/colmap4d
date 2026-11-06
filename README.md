@@ -97,7 +97,7 @@ from colmap4d.preview import (
 sizes = inspect_components("/data/model")  # stats only; includes all images/ files
 cameras = read_camera_page("/data/model", offset=0, limit=128)
 page = read_point_page("/data/model", offset=1000, limit=1024)
-sample = sample_points("/data/model", budget=200_000)
+sample = sample_points("/data/model", budget=200_000, seed=0)
 # sample.points: bounded list of Point3D, with track=None
 # sample.times: selected ID -> exact int64 ns; missing means temporally unbounded
 files = preview_files("/data/model", part="points", budget=200_000)
@@ -105,10 +105,21 @@ files = preview_files("/data/model", part="points", budget=200_000)
 ```
 
 Cameras and points can be read independently. Poses omit 2D observations; point
-batches omit tracks. Uniform sampling selects evenly spaced **source row ranks**
-(including both endpoints; a budget of one selects the middle row), preserving
-source order and original integer IDs/timestamps. At most the requested number
-of geometries is decoded. Unordered/duplicate timestamp rows join by ID, last wins.
+batches omit tracks. Since 1.0.6, sampling uses **stratified jitter** instead of
+fixed evenly spaced source ranks: divide row order into `min(total, budget)`
+disjoint integer intervals and choose one random row inside each. This breaks
+fixed-stride aliasing in spatially ordered point tables and returns exactly that
+many distinct rows, in source order. Small models keep all points. The first and
+last rows are not forced. Interval widths differ by at most one; this is stratified
+coverage, not independent equal-probability Bernoulli sampling.
+
+`sample_points(..., seed=0)` and `preview_files(..., seed=0)` create a fresh local
+`random.Random(seed)` per call. The fixed default reproduces comparisons without
+changing global RNG state. Reproducibility assumes the same source row order,
+budget, seed and Python RNG implementation; cross-version identical selections
+are not a wire-format guarantee. A caller can explicitly choose another integer
+seed. Sequential pagination is unaffected. At most the requested number of
+geometries is decoded. Unordered/duplicate timestamp rows join by ID, last wins.
 Preview files are display subsets, not reconstruction exports. All source files
 remain untouched. Missing sidecars remain empty/timeless; this API does not
 synthesize timestamps.

@@ -87,9 +87,9 @@ def test_cameras_are_separate_and_paged_without_points_or_observations(model, mo
 
 @pytest.mark.parametrize(
     "budget,expected",
-    [(1, [13]), (3, [10, 13, 16]), (5, [10, 11, 13, 14, 16]), (100, list(range(10, 17)))],
+    [(1, [16]), (3, [11, 13, 14]), (5, [10, 11, 12, 14, 16]), (100, list(range(10, 17)))],
 )
-def test_uniform_samples_only_decode_chosen_geometry(model, monkeypatch, budget, expected):
+def test_jitter_samples_only_decode_chosen_geometry(model, monkeypatch, budget, expected):
     root, _, ns = model
     decoded = []
     original = preview._POINT
@@ -126,8 +126,8 @@ def test_files_are_regular_colmap_with_bounded_tracks_and_exact_timestamps(model
     assert len(points.files["points3D.bin"]) == 8 + 3 * 51
     for name, data in points.files.items():
         (tmp_path / name).write_bytes(data)
-    assert list(read_points3D_bin(tmp_path / "points3D.bin")) == [10, 13, 16]
-    assert read_points_t_bin(tmp_path / "points_t.bin") == {i: ns + i for i in (10, 13, 16)}
+    assert list(read_points3D_bin(tmp_path / "points3D.bin")) == [11, 13, 14]
+    assert read_points_t_bin(tmp_path / "points_t.bin") == {13: ns + 13}
     cameras = preview.preview_files(root, part="cameras")
     for name, data in cameras.files.items():
         (tmp_path / name).write_bytes(data)
@@ -166,7 +166,8 @@ def test_truncated_binary_tables_fail_explicitly(model, stem):
         if stem == "images.bin":
             preview.read_camera_page(root)
         else:
-            preview.sample_points(root, budget=3)
+            # Include every row so the truncated tail is part of the requested data.
+            preview.sample_points(root, budget=100)
 
 
 def test_empty_binary_and_unknown_component(tmp_path):
@@ -174,3 +175,41 @@ def test_empty_binary_and_unknown_component(tmp_path):
     assert preview.sample_points(tmp_path).points == []
     with pytest.raises(ValueError, match="part"):
         preview.preview_files(tmp_path, part="invalid")
+
+
+def test_sampling_repeats_without_global_rng_state_and_accepts_explicit_seed(model):
+    import random
+
+    root = model[0]
+    state = random.getstate()
+    first = preview.sample_points(root, budget=3)
+    assert first == preview.sample_points(root, budget=3)
+    assert first == preview.sample_points(root, budget=3, seed=0)
+    assert first != preview.sample_points(root, budget=3, seed=1)
+    assert random.getstate() == state
+    assert preview.preview_files(root, part="points", budget=3, seed=0) == (
+        preview.preview_files(root, part="points", budget=3, seed=0)
+    )
+    assert preview.preview_files(root, part="points", budget=3, seed=0).files != (
+        preview.preview_files(root, part="points", budget=3, seed=1).files
+    )
+
+
+def test_jitter_breaks_periodic_spatial_aliasing_with_exact_count(tmp_path):
+    # A raster-ordered cloud: fixed stride 20 only visits 32 of 128 columns.
+    table = tmp_path / "points3D.bin"
+    points = {i + 1: Point3D(i + 1, [i % 128, i // 128, 0], [1, 2, 3], 0, []) for i in range(10000)}
+    write_points3D_bin(table, points)
+    batch = preview.sample_points(tmp_path, budget=500)
+    ranks = [p.id - 1 for p in batch.points]
+    assert len(ranks) == len(set(ranks)) == 500
+    assert ranks == sorted(ranks)
+    assert [rank // 20 for rank in ranks] == list(range(500))
+    assert len({rank % 128 for rank in ranks}) > 100
+    assert len({b - a for a, b in zip(ranks, ranks[1:])}) > 10
+
+
+@pytest.mark.parametrize("seed", [True, "0", 0.5])
+def test_invalid_seed_is_explicit(model, seed):
+    with pytest.raises(ValueError, match="seed"):
+        preview.sample_points(model[0], seed=seed)
